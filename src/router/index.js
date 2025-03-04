@@ -14,6 +14,12 @@ import AdminSeller from '../views/adminFolder/AdminSeller.vue';
 import AdminCustomer from '../views/adminFolder/AdminCustomer.vue';
 import AdminRegister from '../views/adminFolder/AdminRegister.vue';
 import AdminDashboard from '../views/adminFolder/AdminDashboard.vue';
+import Sellers from '../views/adminFolder/Sellers.vue';
+import Customers from '../views/adminFolder/Customers.vue';
+import Dashboard from '../views/adminFolder/Dashboard.vue';
+import Products from '../views/adminFolder/Products.vue';
+import ProductCategories from '../views/adminFolder/ProductCategories.vue';
+import SellerDetails from '../views/adminFolder/SellerDetails.vue';
 
 
 // customer folder
@@ -156,6 +162,36 @@ const routes = [
     path: '/products',
     name: 'productmanagement',
     component: ProductManagement
+  },
+  {
+    path: '/admin',
+    name: 'Dashboard',
+    component: Dashboard
+  },
+  {
+    path: '/admin/sellers',
+    name: 'Sellers',
+    component: Sellers
+  },
+  {
+    path: '/admin/customers',
+    name: 'Customers',
+    component: Customers
+  },
+  {
+    path: '/admin/categories',
+    name: 'ProductCategories',
+    component: ProductCategories
+  },
+  {
+    path: '/admin/products',
+    name: 'Products',
+    component: Products
+  },
+  {
+    path: '/admin/sellers/:id',
+    name: 'SellerDetails',
+    component: SellerDetails
   },
  
 ];
