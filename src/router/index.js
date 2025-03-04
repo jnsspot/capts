@@ -15,6 +15,13 @@ import AdminSeller from '../views/adminFolder/AdminSeller.vue';
 import AdminCustomer from '../views/adminFolder/AdminCustomer.vue';
 import AdminRegister from '../views/adminFolder/AdminRegister.vue';
 import AdminDashboard from '../views/adminFolder/AdminDashboard.vue';
+import Dashboard from '../views/adminFolder/Dashboard.vue'; 
+import Sellers from '../views/adminFolder/Sellers.vue';
+import Customers from '../views/adminFolder/Customers.vue';
+import Products from '../views/adminFolder/Products.vue';
+import ProductCategories from '../views/adminFolder/ProductCategories.vue';
+import SellerDetails from '../views/adminFolder/SellerDetails.vue';
+
 
 
 // Customer components
