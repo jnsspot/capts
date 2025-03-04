@@ -15,12 +15,7 @@ import AdminSeller from '../views/adminFolder/AdminSeller.vue';
 import AdminCustomer from '../views/adminFolder/AdminCustomer.vue';
 import AdminRegister from '../views/adminFolder/AdminRegister.vue';
 import AdminDashboard from '../views/adminFolder/AdminDashboard.vue';
-import Sellers from '../views/adminFolder/Sellers.vue';
-import Customers from '../views/adminFolder/Customers.vue';
-import Dashboard from '../views/adminFolder/Dashboard.vue';
-import Products from '../views/adminFolder/Products.vue';
-import ProductCategories from '../views/adminFolder/ProductCategories.vue';
-import SellerDetails from '../views/adminFolder/SellerDetails.vue';
+
 
 // Customer components
 import Profile from '../views/customerFolder/Profile.vue';
@@ -200,27 +195,9 @@ const routes = [
   {
     path: '/products',
     name: 'productmanagement',
-    component: ProductManagement,
-    meta: { requiresAuth: true, allowedRoles: ['seller'] }, // Only sellers can access
+    component: ProductManagement
   },
-  {
-    path: '/orders',
-    name: 'Orders',
-    component: Orders,
-    meta: { requiresAuth: true, allowedRoles: ['seller'] }, // Only sellers can access
-  },
-  {
-    path: '/chat',
-    name: 'Chat',
-    component: Chat,
-    meta: { requiresAuth: true, allowedRoles: ['seller'] }, // Only sellers can access
-  },
-  {
-    path: '/addproduct',
-    name: 'AddProduct',
-    component: AddEditProduct,
-    meta: { requiresAuth: true, allowedRoles: ['seller'] }, // Only sellers can access
-  },
+ 
 ];
 
 const router = createRouter({
