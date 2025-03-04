@@ -37,6 +37,27 @@ import SellerHome from '@/views/sellerFolder/SellerHome.vue';
 
 const routes = [
   {
+    path: '/chat',
+    name: 'Chat',
+    component: Chat
+  },
+  {
+    path: '/orders',
+    name: 'Orders',
+    component: Orders
+  },
+  {
+    path: '/edit-product/:id',
+    name: 'EditProduct',
+    component: AddEditProduct
+  },
+  {
+    path: '/addproduct',
+    name: 'AddProduct',
+    component: AddEditProduct
+  },
+
+  {
     path: '/admin',
     name: 'Dashboard',
     component: Dashboard
