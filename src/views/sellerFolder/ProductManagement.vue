@@ -144,56 +144,59 @@
         </div>
         
         <div class="products-grid">
-          <div class="product-card" v-for="product in filteredProducts" :key="product.id">
-            <div class="product-image">
-              <img :src="product.image || '/placeholder.svg?height=180&width=180'" alt="Product image" />
-              <div class="product-badge" v-if="product.ribbon">{{ product.ribbon }}</div>
-              <div class="product-status" :class="product.status.toLowerCase()">{{ product.status }}</div>
-            </div>
-            <div class="product-details">
-              <div class="product-category">{{ product.category }}</div>
-              <h3 class="product-name">{{ product.productName }}</h3>
-              <div class="product-stats">
-                <div class="stat">
-                  <ShoppingCart size="14" />
-                  {{ product.sales || 0 }}
-                </div>
-                <div class="stat">
-                  <Star size="14" />
-                  {{ product.rating || 0 }}
-                </div>
-                <div class="stat">
-                  <Eye size="14" />
-                  {{ product.views || 0 }}
-                </div>
-              </div>
-              <div class="product-price">
-                <div class="current-price">${{ product.price?.toFixed(2) || '0.00' }}/{{ product.unit }}</div>
-                <div class="profit">Profit: ${{ (product.profit || 0).toFixed(2) }}</div>
-              </div>
-              <div class="product-stock">
-                <div class="stock-label">Stock:</div>
-                <div class="stock-bar">
-                  <div 
-                    class="stock-progress" 
-                    :style="{ width: `${(product.stock / product.maxStock) * 100}%` }"
-                    :class="getStockClass(product.stock, product.maxStock)"
-                  ></div>
-                </div>
-                <div class="stock-value">{{ product.stock }} {{ product.unit }}</div>
-              </div>
-              <div class="product-actions">
-                <router-link :to="`/edit-product/${product.id}`" class="edit-btn">
-                  <Edit size="16" />
-                  Edit
-                </router-link>
-                <button class="delete-btn" @click="deleteProduct(product.id)">
-                  <Trash size="16" />
-                </button>
-              </div>
-            </div>
+  <div v-if="isLoading">Loading...</div>
+  <div v-else>
+    <div class="product-card" v-for="product in filteredProducts" :key="product.id">
+      <div class="product-image">
+        <img :src="product.image || '/placeholder.svg?height=180&width=180'" alt="Product image" />
+        <div class="product-badge" v-if="product.ribbon">{{ product.ribbon }}</div>
+        <div class="product-status" :class="product.status?.toLowerCase() || ''">{{ product.status || 'No Status' }}</div>
+      </div>
+      <div class="product-details">
+        <div class="product-category">{{ product.category || 'No Category' }}</div>
+        <h3 class="product-name">{{ product.productName || 'No Name' }}</h3>
+        <div class="product-stats">
+          <div class="stat">
+            <ShoppingCart size="14" />
+            {{ product.sales || 0 }}
+          </div>
+          <div class="stat">
+            <Star size="14" />
+            {{ product.rating || 0 }}
+          </div>
+          <div class="stat">
+            <Eye size="14" />
+            {{ product.views || 0 }}
           </div>
         </div>
+        <div class="product-price">
+          <div class="current-price">${{ (Number(product.price) || 0).toFixed(2) }}/{{ product.unit }}</div>
+          <div class="profit">Profit: ${{ (Number(product.profit) || 0).toFixed(2) }}</div>
+        </div>
+        <div class="product-stock">
+          <div class="stock-label">Stock:</div>
+          <div class="stock-bar">
+            <div 
+              class="stock-progress" 
+              :style="{ width: `${(product.stock / product.maxStock) * 100}%` }"
+              :class="getStockClass(product.stock, product.maxStock)"
+            ></div>
+          </div>
+          <div class="stock-value">{{ product.stock }} {{ product.unit }}</div>
+        </div>
+        <div class="product-actions">
+          <router-link :to="`/edit-product/${product.id}`" class="edit-btn">
+            <Edit size="16" />
+            Edit
+          </router-link>
+          <button class="delete-btn" @click="deleteProduct(product.id)">
+            <Trash size="16" />
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
       </div>
     </div>
   </template>
@@ -283,26 +286,34 @@ const products = ref([]);
 
 // Fetch products from Firestore based on userId
 const fetchProducts = async () => {
-    const user = auth.currentUser;
-    if (!user) {
-        alert('You must be logged in to view products.');
-        router.push('/login');
-        return;
-    }
+  const user = auth.currentUser;
+  if (!user) {
+    alert('You must be logged in to view products.');
+    router.push('/login');
+    return;
+  }
 
-    try {
-        const q = query(collection(db, 'products'), where('userId', '==', user.uid));
-        const querySnapshot = await getDocs(q);
-        products.value = querySnapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-        }));
-    } catch (error) {
-        console.error('Error fetching products:', error);
-        alert('Failed to fetch products.');
-    } finally {
-        isLoading.value = false; // Set loading to false after fetching
-    }
+  try {
+    const q = query(collection(db, 'products'), where('userId', '==', user.uid));
+    const querySnapshot = await getDocs(q);
+    products.value = querySnapshot.docs.map((doc) => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        productName: data.productName || 'No Name',
+        category: data.category || 'No Category',
+        status: data.status || 'No Status',
+        price: Number(data.price) || 0, // Ensure price is a number
+        profit: Number(data.profit) || 0, // Ensure profit is a number
+        ...data, // Spread the rest of the data
+      };
+    });
+  } catch (error) {
+    console.error('Error fetching products:', error);
+    alert('Failed to fetch products.');
+  } finally {
+    isLoading.value = false; // Set loading to false after fetching
+  }
 };
 
 // Filtered products based on search, category, and status
@@ -310,11 +321,11 @@ const filteredProducts = computed(() => {
     return products.value.filter(product => {
         const productName = product.productName?.toLowerCase() || ''; // Use optional chaining and fallback
         const category = product.category?.toLowerCase() || ''; // Use optional chaining and fallback
-        const status = product.status || ''; // Use fallback for status
+        const status = product.status?.toLowerCase() || ''; // Use optional chaining and fallback
 
         const matchesSearch = productName.includes(searchQuery.value.toLowerCase());
         const matchesCategory = activeCategory.value === 'all' || category === activeCategory.value;
-        const matchesFilter = activeFilter.value === 'All' || status === activeFilter.value;
+        const matchesFilter = activeFilter.value === 'All' || status === activeFilter.value.toLowerCase();
 
         return matchesSearch && matchesCategory && matchesFilter;
     });

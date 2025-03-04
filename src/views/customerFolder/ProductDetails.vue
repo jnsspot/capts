@@ -1,278 +1,272 @@
 <template>
-    <div class="product-details">
-      <div class="header">
-        <button class="back-button" @click="$emit('navigate', 'HomePage')">
-          <ChevronLeft size="22" />
+  <div class="product-details">
+    <div class="header">
+      <button class="back-button" @click="$emit('navigate', 'HomePage')">
+        <ChevronLeft size="22" />
+      </button>
+      <h1>Product Details</h1>
+      <div class="header-buttons">
+        <button class="icon-button" @click="toggleCart">
+          <ShoppingCart size="18" />
         </button>
-        <h1>Product Details</h1>
-        <div class="header-buttons">
-          <button class="icon-button" @click="toggleCart">
-            <ShoppingCart size="18" />
-          </button>
-          <button class="icon-button" @click="toggleProfileMenu" ref="profileRef">
-            <User size="18" />
-          </button>
+        <button class="icon-button" @click="toggleProfileMenu" ref="profileRef">
+          <User size="18" />
+        </button>
+        
+        <!-- Profile Dropdown Menu -->
+        <div class="profile-dropdown" v-if="showProfileMenu">
+          <div class="profile-header">
+            <div class="profile-avatar">
+              <img src="https://randomuser.me/api/portraits/men/32.jpg" alt="User avatar" />
+            </div>
+            <div class="profile-user-info">
+              <h3>Antonio Yanto</h3>
+              <p>antonio.yanto@example.com</p>
+            </div>
+          </div>
           
-          <!-- Profile Dropdown Menu -->
-          <div class="profile-dropdown" v-if="showProfileMenu">
-            <div class="profile-header">
-              <div class="profile-avatar">
-                <img src="https://randomuser.me/api/portraits/men/32.jpg" alt="User avatar" />
-              </div>
-              <div class="profile-user-info">
-                <h3>Antonio Yanto</h3>
-                <p>antonio.yanto@example.com</p>
-              </div>
-            </div>
-            
-            <div class="profile-actions">
-              <button class="become-supplier-btn">
-                <Briefcase size="16" />
-                Become a Farmer/Supplier
-              </button>
-            </div>
-            
-            <div class="profile-menu">
-              <button class="menu-item">
-                <UserCog size="16" />
-                Edit Profile
-              </button>
-              <button class="menu-item">
-                <Settings size="16" />
-                Account Settings
-              </button>
-              <button class="menu-item">
-                <MapPin size="16" />
-                Shipping Address
-              </button>
-              <button class="menu-item">
-                <FileText size="16" />
-                Terms and Conditions
-              </button>
-              <button class="menu-item">
-                <Shield size="16" />
-                Privacy Policy
-              </button>
-              <button class="menu-item">
-                <Star size="16" />
-                Rate this App
-              </button>
-              <button class="menu-item">
-                <Share2 size="16" />
-                Share this App
-              </button>
-              <button class="menu-item logout">
-                <LogOut size="16" />
-                Logout
-              </button>
-            </div>
+          <div class="profile-actions">
+            <button class="become-supplier-btn">
+              <Briefcase size="16" />
+              Become a Farmer/Supplier
+            </button>
           </div>
-        </div>
-      </div>
-      
-      <div class="product-image-container">
-        <img :src="productImage" alt="Product" class="product-image">
-      </div>
-      
-      <div class="product-info">
-        <div class="product-header">
-          <div>
-            <h2>{{ productName }}</h2>
-            <p class="weight">In 50 gm</p>
-            <p class="total-weight">1000 gm</p>
-          </div>
-          <button class="favorite-button">
-            <Heart size="20" />
-          </button>
-        </div>
-        
-        <div class="price-section">
-          <h3 class="price">23.<span class="cents">46$</span></h3>
-          <div class="delivery-badge">
-            <span class="dot"></span>
-            <span>Available on fast delivery</span>
-          </div>
-        </div>
-        
-        <div class="variants">
-          <div class="variant-circle red active"></div>
-          <div class="variant-circle orange"></div>
-          <div class="variant-circle blue"></div>
-        </div>
-        
-        <div class="rating">
-          <Star size="16" fill="#FFD700" color="#FFD700" />
-          <span>4.5 Rating</span>
-        </div>
-        
-        <div class="guarantee">
-          <p>100% satisfaction guarantee. If you experience any of the following issues, missing, poor item, late arrival, unprofessional servic... <a href="#" class="read-more">Read more</a></p>
-        </div>
-        
-        <div class="quantity-section">
-          <button class="quantity-button decrease">
-            <Minus size="16" />
-          </button>
-          <span class="quantity">1</span>
-          <button class="quantity-button increase">
-            <Plus size="16" />
-          </button>
           
-          <button class="add-to-cart">
-            <ShoppingCart size="16" />
-            Add to cart
-          </button>
-        </div>
-        
-        <div class="related-products">
-          <h3>You might also like</h3>
-          <div class="related-products-grid">
-            <div class="related-product" v-for="(product, index) in relatedProducts" :key="index" @click="viewProduct(product)">
-              <div class="related-product-image">
-                <img :src="product.image" :alt="product.name">
-              </div>
-              <div class="related-product-info">
-                <h4>{{ product.name }}</h4>
-                <p class="related-price">${{ product.price }}</p>
-              </div>
-            </div>
+          <div class="profile-menu">
+            <button class="menu-item">
+              <UserCog size="16" />
+              Edit Profile
+            </button>
+            <button class="menu-item">
+              <Settings size="16" />
+              Account Settings
+            </button>
+            <button class="menu-item">
+              <MapPin size="16" />
+              Shipping Address
+            </button>
+            <button class="menu-item">
+              <FileText size="16" />
+              Terms and Conditions
+            </button>
+            <button class="menu-item">
+              <Shield size="16" />
+              Privacy Policy
+            </button>
+            <button class="menu-item">
+              <Star size="16" />
+              Rate this App
+            </button>
+            <button class="menu-item">
+              <Share2 size="16" />
+              Share this App
+            </button>
+            <button class="menu-item logout">
+              <LogOut size="16" />
+              Logout
+            </button>
           </div>
         </div>
       </div>
-      
-      <bottom-navigation active-tab="home" @navigate="$emit('navigate', $event)" @tab-change="handleTabChange" />
     </div>
-  </template>
-  
-  <script>
-  import BottomNavigation from '@/components/BottomNavigation.vue';
-  import { 
-    ChevronLeft, 
-    ShoppingCart, 
-    Heart, 
-    Star, 
-    Minus, 
-    Plus, 
+    
+    <div class="product-image-container">
+      <img :src="productImage" alt="Product" class="product-image">
+    </div>
+    
+    <div class="product-info">
+      <div class="product-header">
+        <div>
+          <h2>{{ productName }}</h2>
+          <p class="weight">In 50 gm</p>
+          <p class="total-weight">1000 gm</p>
+        </div>
+        <button class="favorite-button">
+          <Heart size="20" />
+        </button>
+      </div>
+      
+      <div class="price-section">
+        <h3 class="price">{{ productPrice }}<span class="cents">$</span></h3>
+        <div class="delivery-badge">
+          <span class="dot"></span>
+          <span>Available on fast delivery</span>
+        </div>
+      </div>
+      
+      <div class="variants">
+        <div class="variant-circle red active"></div>
+        <div class="variant-circle orange"></div>
+        <div class="variant-circle blue"></div>
+      </div>
+      
+      <div class="rating">
+        <Star size="16" fill="#FFD700" color="#FFD700" />
+        <span>4.5 Rating</span>
+      </div>
+      
+      <div class="guarantee">
+        <p>100% satisfaction guarantee. If you experience any of the following issues, missing, poor item, late arrival, unprofessional servic... <a href="#" class="read-more">Read more</a></p>
+      </div>
+      
+      <div class="quantity-section">
+        <button class="quantity-button decrease">
+          <Minus size="16" />
+        </button>
+        <span class="quantity">1</span>
+        <button class="quantity-button increase">
+          <Plus size="16" />
+        </button>
+        
+        <button class="add-to-cart">
+          <ShoppingCart size="16" />
+          Add to cart
+        </button>
+      </div>
+      
+      <div class="related-products">
+        <h3>You might also like</h3>
+        <div class="related-products-grid">
+          <div class="related-product" v-for="(product, index) in relatedProducts" :key="index" @click="viewProduct(product)">
+            <div class="related-product-image">
+              <img :src="product.image" :alt="product.name">
+            </div>
+            <div class="related-product-info">
+              <h4>{{ product.name }}</h4>
+              <p class="related-price">${{ product.price }}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <bottom-navigation active-tab="home" @navigate="$emit('navigate', $event)" @tab-change="handleTabChange" />
+  </div>
+</template>
+
+<script>
+import BottomNavigation from '@/components/BottomNavigation.vue';
+import { 
+  ChevronLeft, 
+  ShoppingCart, 
+  Heart, 
+  Star, 
+  Minus, 
+  Plus, 
+  User,
+  UserCog, 
+  Settings, 
+  FileText, 
+  Shield, 
+  Share2, 
+  LogOut,
+  Briefcase,
+  MapPin
+} from 'lucide-vue-next';
+import { onMounted, onUnmounted, ref } from 'vue';
+import { fetchProductById } from '@/services/productService'; // Assume you have a service to fetch product data
+
+export default {
+  components: {
+    BottomNavigation,
+    ChevronLeft,
+    ShoppingCart,
+    Heart,
+    Star,
+    Minus,
+    Plus,
     User,
-    UserCog, 
-    Settings, 
-    FileText, 
-    Shield, 
-    Share2, 
+    UserCog,
+    Settings,
+    FileText,
+    Shield,
+    Share2,
     LogOut,
     Briefcase,
     MapPin
-  } from 'lucide-vue-next';
-  import { onMounted, onUnmounted, ref } from 'vue';
-  
-  export default {
-    components: {
-      BottomNavigation,
-      ChevronLeft,
-      ShoppingCart,
-      Heart,
-      Star,
-      Minus,
-      Plus,
-      User,
-      UserCog,
-      Settings,
-      FileText,
-      Shield,
-      Share2,
-      LogOut,
-      Briefcase,
-      MapPin
-    },
-    props: {
-      product: {
-        type: Object,
-        default: null
-      }
-    },
-    setup() {
-      const showProfileMenu = ref(false);
-      const profileRef = ref(null);
-  
-      const toggleProfileMenu = () => {
-        showProfileMenu.value = !showProfileMenu.value;
-      };
-  
-      const handleClickOutside = (event) => {
-        if (profileRef.value && !profileRef.value.contains(event.target)) {
-          showProfileMenu.value = false;
-        }
-      };
-  
-      onMounted(() => {
-        document.addEventListener('click', handleClickOutside);
-      });
-  
-      onUnmounted(() => {
-        document.removeEventListener('click', handleClickOutside);
-      });
-  
-      return {
-        showProfileMenu,
-        profileRef,
-        toggleProfileMenu
-      };
-    },
-    data() {
-      return {
-        relatedProducts: [
-          {
-            id: 101,
-            name: 'Premium Steak',
-            price: '19.99',
-            image: 'https://cdn-icons-png.flaticon.com/512/5769/5769382.png'
-          },
-          {
-            id: 102,
-            name: 'Lamb Chops',
-            price: '15.49',
-            image: 'https://cdn-icons-png.flaticon.com/512/8059/8059123.png'
-          },
-          {
-            id: 103,
-            name: 'Chicken Breast',
-            price: '8.99',
-            image: 'https://cdn-icons-png.flaticon.com/512/1046/1046769.png'
-          },
-          {
-            id: 104,
-            name: 'Ground Beef',
-            price: '7.49',
-            image: 'https://cdn-icons-png.flaticon.com/512/3075/3075977.png'
-          }
-        ]
-      }
-    },
-    computed: {
-      productName() {
-        return this.product ? this.product.name : 'Beef Mixed Cut Bone';
-      },
-      productImage() {
-        return this.product ? this.product.image : 'https://cdn-icons-png.flaticon.com/512/3075/3075977.png';
-      }
-    },
-    methods: {
-      handleTabChange(tab) {
-        console.log(`Changed to tab: ${tab}`);
-        // Handle tab change logic here
-      },
-      toggleCart() {
-        console.log('Cart toggled');
-        // Implement cart toggle functionality
-      },
-      viewProduct(product) {
-        console.log(`Viewing product: ${product.name}`);
-        // Navigate to the product details with the selected product
-        this.$emit('navigate', 'ProductDetails', product);
-      }
+  },
+  props: {
+    productId: {
+      type: String,
+      required: true
     }
+  },
+  setup() {
+    const showProfileMenu = ref(false);
+    const profileRef = ref(null);
+
+    const toggleProfileMenu = () => {
+      showProfileMenu.value = !showProfileMenu.value;
+    };
+
+    const handleClickOutside = (event) => {
+      if (profileRef.value && !profileRef.value.contains(event.target)) {
+        showProfileMenu.value = false;
+      }
+    };
+
+    onMounted(() => {
+      document.addEventListener('click', handleClickOutside);
+    });
+
+    onUnmounted(() => {
+      document.removeEventListener('click', handleClickOutside);
+    });
+
+    return {
+      showProfileMenu,
+      profileRef,
+      toggleProfileMenu
+    };
+  },
+  data() {
+    return {
+      product: null,
+      
+    }
+  },
+  computed: {
+    productName() {
+      return this.product ? this.product.name : 'Loading...';
+    },
+    productImage() {
+      return this.product ? this.product.image : 'https://cdn-icons-png.flaticon.com/512/3075/3075977.png';
+    },
+    productPrice() {
+      return this.product ? this.product.price : '0.00';
+    },
+    productStock() {
+      return this.product ? this.product.stock : '0';
+    }
+  },
+  methods: {
+    async fetchProduct() {
+      try {
+        const product = await fetchProductById(this.productId);
+        this.product = product;
+      } catch (error) {
+        console.error('Failed to fetch product:', error);
+      }
+    },
+    handleTabChange(tab) {
+      console.log(`Changed to tab: ${tab}`);
+      // Handle tab change logic here
+    },
+    toggleCart() {
+      console.log('Cart toggled');
+      // Implement cart toggle functionality
+    },
+    viewProduct(product) {
+      console.log(`Viewing product: ${product.name}`);
+      // Navigate to the product details with the selected product
+      this.$emit('navigate', 'ProductDetails', product);
+    }
+  },
+  mounted() {
+    this.fetchProduct();
   }
-  </script>
+}
+</script>
   
   <style scoped>
   .product-details {
