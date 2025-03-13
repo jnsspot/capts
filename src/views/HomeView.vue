@@ -22,13 +22,13 @@
                 <img :src="userPhotoURL" alt="User avatar" />
               </div>
               <div class="profile-user-info">
-                <h3>{{ userName }}</h3>
+                <h3>{{ username }}</h3> 
                 <p>{{ userEmail }}</p>
               </div>
             </div>
             
             <div class="profile-actions">
-              <button class="become-supplier-btn" @click="navigateToPath('/seller-register')">
+              <button class="become-supplier-btn" @click="navigateToPath('/register-seller')">
                 <Briefcase size="16" />
                 Become a Farmer/Supplier
               </button>
@@ -106,33 +106,35 @@
     </div>
     
     <div class="content">
-      <div class="section-header">
-        <h2>Fresh Harvest</h2>
-        <a href="#" class="see-more">See more</a>
-      </div>
-      
-      <!-- Products Grid -->
-      <div class="products-grid">
-        <div v-if="isLoading">Loading products...</div>
-        <div v-else>
-          <div class="product-card" v-for="(product, index) in products" :key="index" @click="viewProduct(product)">
-            <div class="product-image">
-              <img :src="product.image" :alt="product.name">
-            </div>
-            <div class="product-info">
-              <h3>{{ product.name }}</h3>
-              <p class="shop-info">({{ product.shop }})</p>
-              <p class="weight">{{ product.weight }}</p>
-            </div>
-            <div class="product-price">
-              <p><span class="price">₱{{ product.price }}</span></p>
-              <button class="add-button" @click.stop="addToCart(product)">
-                <Plus size="14" />
-              </button>
-            </div>
-          </div>
+  <div class="section-header">
+    <h2>Fresh Harvest</h2>
+    <a href="#" class="see-more">See more</a>
+  </div>
+
+  <!-- Products Grid -->
+  <div class="products-grid">
+    <div v-if="isLoading">Loading products...</div>
+    <div v-else class="products-container"> <!-- Add a container for products -->
+      <div class="product-card" v-for="(product, index) in products" :key="index" @click="viewProduct(product)">
+        <div class="product-image">
+          <img :src="product.image" :alt="product.name">
+        </div>
+        <div class="product-info">
+          <h3>{{ product.productName }}</h3>
+          <p class="price">₱{{ product.price }}</p>
+          <p class="stock" :class="{ 'low-stock': product.stock <= 10 }">
+            {{ product.stock > 0 ? `${product.stock} in stock` : 'Out of stock' }}
+          </p>
+        </div>
+        <div class="product-actions">
+          <button class="add-button" @click.stop="addToCart(product)" :disabled="product.stock <= 0">
+            <Plus size="14" />
+          </button>
         </div>
       </div>
+    </div>
+  </div>
+</div>
       
       <div class="delivery-options">
         <div class="delivery-card grocery">
@@ -153,7 +155,8 @@
         <h2>Featured Products</h2>
         <a href="#" class="see-all">See all</a>
       </div>
-      
+        <div v-if="isLoading">Loading products...</div>
+    <div v-else>
       <div class="featured-products">
         <div class="featured-product-card" v-for="(product, index) in featuredProducts" :key="index" @click="viewProduct(product)">
           <div class="featured-product-image">
@@ -181,6 +184,7 @@
   </div>
 </template>
 
+
 <script>
 import BottomNavigation from '@/components/BottomNavigation.vue';
 import { 
@@ -202,7 +206,7 @@ import { onMounted, onUnmounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { signOut, onAuthStateChanged } from 'firebase/auth';
 import { auth, db } from '@/firebase/firebaseConfig'; // Import Firestore
-import { collection, getDocs } from 'firebase/firestore'; // Import Firestore functions
+import { collection, getDocs, doc, getDoc } from 'firebase/firestore'; // Import Firestore functions
 
 export default {
   components: {
@@ -260,19 +264,27 @@ export default {
   data() {
     return {
       userPhotoURL: '', // User's profile photo URL
-      userName: '', // User's display name
+      username: '', // User's username from Firestore
       userEmail: '', // User's email
       featuredProducts: [] // Featured products (if any)
     };
   },
   methods: {
     // Fetch the logged-in user's information
-    fetchUserInfo() {
+    async fetchUserInfo() {
       const user = auth.currentUser;
       if (user) {
         this.userPhotoURL = user.photoURL || 'https://randomuser.me/api/portraits/men/32.jpg'; // Default image if no photoURL
-        this.userName = user.displayName || user.email.split('@')[0]; // Use email prefix if no displayName
         this.userEmail = user.email;
+
+        // Fetch the username from Firestore
+        const userDocRef = doc(db, 'users', user.uid);
+        const userDoc = await getDoc(userDocRef);
+        if (userDoc.exists()) {
+          this.username = userDoc.data().username; // Set the username from Firestore
+        } else {
+          console.log('No such document!');
+        }
       }
     },
     // Fetch all products from Firestore
@@ -281,12 +293,15 @@ export default {
         const querySnapshot = await getDocs(collection(db, 'products'));
         this.products = querySnapshot.docs.map((doc) => ({
           id: doc.id,
-          ...doc.data() // Spread the rest of the data
+          image: doc.data().image,
+          name: doc.data().name,
+          price: doc.data().price,
+          stock: doc.data().stock
         }));
       } catch (error) {
         console.error('Error fetching products:', error);
       } finally {
-        this.isLoading = false; // Set loading to false after fetching
+        this.isLoading = false;
       }
     },
     async confirmLogout() {
@@ -300,10 +315,14 @@ export default {
       }
     },
     viewProduct(product) {
-      this.router.push({
-        path: '/product-details',
-        query: { id: product.id }
-      });
+      console.log('Product object:', product); // Debugging
+      const productId = product.id || product.productId;
+      if (!productId) {
+        console.error('Product ID is undefined. Cannot navigate to product details.');
+        return;
+      }
+      // Navigate to the product details with the selected product
+      this.$router.push({ path: `/product/${productId}` });
     },
     handleTabChange(tab) {
       console.log(`Changed to tab: ${tab}`);
@@ -333,7 +352,7 @@ export default {
       } else {
         // Reset user info if the user is logged out
         this.userPhotoURL = '';
-        this.userName = '';
+        this.username = '';
         this.userEmail = '';
       }
     });
@@ -614,12 +633,90 @@ export default {
   font-size: 14px;
   font-weight: 500;
 }
-
 .products-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 15px;
-  margin-bottom: 20px;
+  display: flex; /* Make the container a flexbox */
+  overflow-x: auto; /* Enable horizontal scrolling */
+  gap: 16px; /* Space between product cards */
+  padding: 16px 0; /* Add padding for spacing */
+  scrollbar-width: none; /* Hide scrollbar for Firefox */
+}
+
+.products-grid::-webkit-scrollbar {
+  display: none; /* Hide scrollbar for Chrome, Safari, Edge */
+}
+
+.products-container {
+  display: flex; /* Ensure the container is a flexbox */
+  gap: 16px; /* Space between product cards */
+}
+
+.product-card {
+  flex: 0 0 auto; /* Prevent flex items from shrinking */
+  width: 160px; /* Set a fixed width for each product card */
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  overflow: hidden;
+  transition: box-shadow 0.3s ease;
+}
+
+.product-card:hover {
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.product-image img {
+  width: 100%;
+  height: 150px;
+  object-fit: cover;
+}
+
+.product-info {
+  padding: 12px;
+}
+
+.product-info h3 {
+  font-size: 16px;
+  margin: 0 0 8px;
+}
+
+.product-info .price {
+  font-size: 14px;
+  color: #333;
+  font-weight: bold;
+  margin: 0 0 4px;
+}
+
+.product-info .stock {
+  font-size: 12px;
+  color: #666;
+  margin: 0;
+}
+
+.product-info .low-stock {
+  color: #ff5722; /* Orange color for low stock */
+}
+
+.product-actions {
+  padding: 12px;
+  text-align: right;
+}
+
+.add-button {
+  background-color: #4caf50; /* Green color for the button */
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 8px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.add-button:disabled {
+  background-color: #ccc; /* Gray color for disabled state */
+  cursor: not-allowed;
+}
+
+.add-button:hover:not(:disabled) {
+  background-color: #45a049; /* Darker green on hover */
 }
 
 .product-card {
@@ -671,12 +768,7 @@ export default {
   color: #999;
 }
 
-.product-price {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0 10px 10px;
-}
+
 
 .price {
   font-weight: bold;

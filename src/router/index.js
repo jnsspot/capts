@@ -54,7 +54,7 @@ const routes = [
     component: Orders
   },
   {
-    path: '/edit-product/:id',
+    path: '/edit-product/:productId',
     name: 'EditProduct',
     component: AddEditProduct
   },
@@ -100,6 +100,12 @@ const routes = [
     component: ProductDetails,
     meta: { requiresAuth: false }, // Public route
   },
+  {
+    path: '/product/:productId', // Use a dynamic route parameter
+    component: ProductDetails,
+    props: true // Pass route params as props
+  },
+
   {
     path: '/',
     name: 'homeview',

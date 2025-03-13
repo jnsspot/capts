@@ -1,7 +1,7 @@
 <template>
   <div class="product-details">
     <div class="header">
-      <button class="back-button" @click="$emit('navigate', 'HomePage')">
+      <button class="back-button" @click="$emit('navigate', '/')">
         <ChevronLeft size="22" />
       </button>
       <h1>Product Details</h1>
@@ -17,11 +17,11 @@
         <div class="profile-dropdown" v-if="showProfileMenu">
           <div class="profile-header">
             <div class="profile-avatar">
-              <img src="https://randomuser.me/api/portraits/men/32.jpg" alt="User avatar" />
+              <img :src="userPhotoURL" alt="User avatar" />
             </div>
             <div class="profile-user-info">
-              <h3>Antonio Yanto</h3>
-              <p>antonio.yanto@example.com</p>
+                <h3>{{ username }}</h3> 
+                <p>{{ userEmail }}</p>
             </div>
           </div>
           
@@ -70,69 +70,60 @@
       </div>
     </div>
     
+    <!-- Product Image -->
     <div class="product-image-container">
-      <img :src="productImage" alt="Product" class="product-image">
+      <img v-if="productImage" :src="productImage" alt="Product" class="product-image">
+      <div v-else class="placeholder-image">No Image Available</div>
     </div>
     
+    <!-- Product Information -->
     <div class="product-info">
       <div class="product-header">
         <div>
           <h2>{{ productName }}</h2>
-          <p class="weight">In 50 gm</p>
-          <p class="total-weight">1000 gm</p>
         </div>
         <button class="favorite-button">
           <Heart size="20" />
         </button>
       </div>
       
+      <!-- Price and Stock -->
       <div class="price-section">
-        <h3 class="price">{{ productPrice }}<span class="cents">$</span></h3>
-        <div class="delivery-badge">
-          <span class="dot"></span>
-          <span>Available on fast delivery</span>
-        </div>
+        <h3 class="price">${{ computedPrice }}</h3>
+        <p class="stock">Stock: {{ computedStock }}</p>
       </div>
       
-      <div class="variants">
-        <div class="variant-circle red active"></div>
-        <div class="variant-circle orange"></div>
-        <div class="variant-circle blue"></div>
-      </div>
-      
-      <div class="rating">
-        <Star size="16" fill="#FFD700" color="#FFD700" />
-        <span>4.5 Rating</span>
-      </div>
-      
+      <!-- Description -->
       <div class="guarantee">
-        <p>100% satisfaction guarantee. If you experience any of the following issues, missing, poor item, late arrival, unprofessional servic... <a href="#" class="read-more">Read more</a></p>
+        <p>{{ productDescription }}</p>
       </div>
       
+      <!-- Quantity and Add to Cart -->
       <div class="quantity-section">
-        <button class="quantity-button decrease">
+        <button class="quantity-button decrease" @click="decreaseQuantity">
           <Minus size="16" />
         </button>
-        <span class="quantity">1</span>
-        <button class="quantity-button increase">
+        <span class="quantity">{{ quantity }}</span>
+        <button class="quantity-button increase" @click="increaseQuantity">
           <Plus size="16" />
         </button>
         
-        <button class="add-to-cart">
+        <button class="add-to-cart" @click="addToCart">
           <ShoppingCart size="16" />
           Add to cart
         </button>
       </div>
       
+      <!-- Related Products -->
       <div class="related-products">
         <h3>You might also like</h3>
         <div class="related-products-grid">
           <div class="related-product" v-for="(product, index) in relatedProducts" :key="index" @click="viewProduct(product)">
             <div class="related-product-image">
-              <img :src="product.image" :alt="product.name">
+              <img :src="product.image" :alt="product.productName">
             </div>
             <div class="related-product-info">
-              <h4>{{ product.name }}</h4>
+              <h4>{{ product.productName }}</h4>
               <p class="related-price">${{ product.price }}</p>
             </div>
           </div>
@@ -163,8 +154,9 @@ import {
   Briefcase,
   MapPin
 } from 'lucide-vue-next';
-import { onMounted, onUnmounted, ref } from 'vue';
-import { fetchProductById } from '@/services/productService'; // Assume you have a service to fetch product data
+import { onMounted, ref } from 'vue';
+import { auth, db } from '@/firebase/firebaseConfig'; // Import Firestore
+import { doc, getDoc, collection, getDocs } from 'firebase/firestore'; // Import Firestore functions
 
 export default {
   components: {
@@ -191,83 +183,147 @@ export default {
       required: true
     }
   },
-  setup() {
-    const showProfileMenu = ref(false);
-    const profileRef = ref(null);
-
-    const toggleProfileMenu = () => {
-      showProfileMenu.value = !showProfileMenu.value;
-    };
-
-    const handleClickOutside = (event) => {
-      if (profileRef.value && !profileRef.value.contains(event.target)) {
-        showProfileMenu.value = false;
-      }
-    };
-
-    onMounted(() => {
-      document.addEventListener('click', handleClickOutside);
-    });
-
-    onUnmounted(() => {
-      document.removeEventListener('click', handleClickOutside);
-    });
-
-    return {
-      showProfileMenu,
-      profileRef,
-      toggleProfileMenu
-    };
-  },
   data() {
     return {
-      product: null,
-      
-    }
+      product: null, // Holds the product data
+      relatedProducts: [], // Holds related products
+      username: '', // User's username from Firestore
+      userEmail: '', // User's email
+      userPhotoURL: '', // User's photo URL
+      showProfileMenu: false, // Controls profile dropdown visibility
+      quantity: 1, // Quantity selected by the user
+    };
   },
   computed: {
     productName() {
-      return this.product ? this.product.name : 'Loading...';
+      return this.product ? this.product.productName : 'Loading...';
     },
     productImage() {
-      return this.product ? this.product.image : 'https://cdn-icons-png.flaticon.com/512/3075/3075977.png';
+      return this.product?.image || ''; // Use an empty string or a placeholder image URL
     },
     productPrice() {
-      return this.product ? this.product.price : '0.00';
+      return this.product ? this.product.price : 0; // Default to 0 if not loaded
     },
     productStock() {
-      return this.product ? this.product.stock : '0';
+      return this.product ? this.product.stock : 0; // Default to 0 if not loaded
+    },
+    productDescription() {
+      return this.product ? this.product.description : 'Loading...';
+    },
+    computedPrice() {
+      // Calculate the total price based on quantity
+      return this.productPrice * this.quantity;
+    },
+    computedStock() {
+      // Calculate the remaining stock based on quantity
+      return this.productStock - this.quantity;
     }
   },
   methods: {
+    async fetchUserInfo() {
+      const user = auth.currentUser;
+      if (user) {
+        this.userPhotoURL = user.photoURL || 'https://randomuser.me/api/portraits/men/32.jpg'; // Default image if no photoURL
+        this.userEmail = user.email;
+
+        // Fetch the username from Firestore
+        const userDocRef = doc(db, 'users', user.uid);
+        const userDoc = await getDoc(userDocRef);
+        if (userDoc.exists()) {
+          this.username = userDoc.data().username; // Set the username from Firestore
+        } else {
+          console.log('No such document!');
+        }
+      }
+    },
     async fetchProduct() {
+      if (!this.productId) {
+        console.error('Product ID is undefined. Cannot fetch product details.');
+        return;
+      }
+
       try {
-        const product = await fetchProductById(this.productId);
-        this.product = product;
+        console.log('Fetching product with ID:', this.productId); // Debugging
+        const productDocRef = doc(db, 'products', this.productId);
+        const productDoc = await getDoc(productDocRef);
+        if (productDoc.exists()) {
+          this.product = productDoc.data();
+          console.log('Product data:', this.product); // Debugging
+        } else {
+          console.log('No such product!');
+        }
       } catch (error) {
         console.error('Failed to fetch product:', error);
       }
     },
-    handleTabChange(tab) {
-      console.log(`Changed to tab: ${tab}`);
-      // Handle tab change logic here
+    async fetchRelatedProducts() {
+      try {
+        const productsCollection = collection(db, 'products');
+        const productsSnapshot = await getDocs(productsCollection);
+        this.relatedProducts = productsSnapshot.docs
+          .filter(doc => doc.id !== this.productId) // Exclude the current product
+          .map(doc => ({ id: doc.id, ...doc.data() })); // Include the document ID
+      } catch (error) {
+        console.error('Failed to fetch related products:', error);
+      }
+    },
+    viewProduct(product) {
+      console.log('Product object:', product); // Debugging
+      const productId = product.id || product.productId;
+      if (!productId) {
+        console.error('Product ID is undefined. Cannot navigate to product details.');
+        return;
+      }
+      // Navigate to the product details with the selected product
+      this.$router.push({ path: `/product/${productId}` });
+    },
+    toggleProfileMenu() {
+      this.showProfileMenu = !this.showProfileMenu;
     },
     toggleCart() {
       console.log('Cart toggled');
       // Implement cart toggle functionality
     },
-    viewProduct(product) {
-      console.log(`Viewing product: ${product.name}`);
-      // Navigate to the product details with the selected product
-      this.$emit('navigate', 'ProductDetails', product);
+    handleTabChange(tab) {
+      console.log(`Changed to tab: ${tab}`);
+      // Handle tab change logic here
+    },
+    increaseQuantity() {
+      if (this.quantity < this.productStock) {
+        this.quantity++;
+      } else {
+        alert('Cannot exceed available stock.');
+      }
+    },
+    decreaseQuantity() {
+      if (this.quantity > 1) {
+        this.quantity--;
+      }
+    },
+    addToCart() {
+      if (this.quantity > this.productStock) {
+        alert('Not enough stock available.');
+        return;
+      }
+      // Add the product to the cart with the selected quantity
+      console.log(`Added ${this.quantity} of ${this.productName} to cart.`);
+      // You can implement your cart logic here
     }
   },
   mounted() {
+    console.log('Product ID:', this.productId); // Debugging: Check if productId is defined
+    if (!this.productId) {
+      console.error('Product ID is undefined. Cannot fetch product details.');
+      return;
+    }
+    this.fetchUserInfo();
     this.fetchProduct();
+    this.fetchRelatedProducts();
   }
 }
 </script>
-  
+
+
   <style scoped>
   .product-details {
     height: 100%;

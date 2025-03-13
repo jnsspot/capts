@@ -65,13 +65,14 @@
     </div>
   </div>
 </template>
-
 <script>
 import { ref, onMounted } from "vue";
 import { useRouter } from "vue-router";
-import { db } from "../../firebase/firebaseConfig";
+import { db, auth } from "@/firebase/firebaseConfig"; // Import Firebase Storage
 import { collection, getDocs, addDoc } from "firebase/firestore";
-import { getAuth } from "firebase/auth"; // Import Firebase Auth
+import { getAuth } from "firebase/auth";
+import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage"; // Firebase Storage functions
+import { v4 as uuidv4 } from 'uuid'; // For generating unique IDs
 
 export default {
   setup() {
@@ -95,6 +96,8 @@ export default {
       preorderLimit: null,
       preorderMessage: "",
       userId: "", // Add userId field
+      productId: "", // Add productId field
+      imageUrl: "", // Add imageUrl field
     });
 
     const auth = getAuth(); // Initialize Firebase Auth
@@ -104,7 +107,7 @@ export default {
       if (file) {
         const reader = new FileReader();
         reader.onload = (e) => {
-          product.value.image = e.target.result;
+          product.value.image = e.target.result; // Base64 image for preview
         };
         reader.readAsDataURL(file);
       }
@@ -131,10 +134,30 @@ export default {
       }
 
       try {
-        // Add the userId to the product data
+        // Generate a unique productId
+        const productId = uuidv4();
+        product.value.productId = productId;
+
+        // Upload the image to Firebase Storage
+        if (product.value.image) {
+          const file = await fetch(product.value.image)
+            .then((res) => res.blob())
+            .then((blob) => new File([blob], `${productId}.jpg`, { type: 'image/jpeg' }));
+
+          const imageRef = storageRef(storage, `sellersproducts/${productId}.jpg`);
+          await uploadBytes(imageRef, file);
+
+          // Get the download URL of the uploaded image
+          const imageUrl = await getDownloadURL(imageRef);
+          product.value.imageUrl = imageUrl; // Save the image URL
+        }
+
+        // Add the product data to Firestore
         await addDoc(collection(db, "products"), {
-          ...product.value,
+          ...product.value, // Spread all product fields
+          productId: productId, // Explicitly include the productId
           userId: user.uid, // Include the userId
+          imageUrl: product.value.imageUrl, // Save the image URL
         });
 
         alert("Product added successfully!");
@@ -148,7 +171,7 @@ export default {
     const fetchCategories = async () => {
       try {
         const querySnapshot = await getDocs(collection(db, "categories"));
-        categories.value = querySnapshot.docs.map(doc => doc.data());
+        categories.value = querySnapshot.docs.map((doc) => doc.data());
       } catch (error) {
         console.error("Error fetching categories:", error);
       }
@@ -164,7 +187,6 @@ export default {
   },
 };
 </script>
-
 
 
 <style scoped>

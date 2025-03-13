@@ -164,10 +164,10 @@
   </template>
   
   <script setup>
- import { ref, computed, onMounted, watch } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { db } from '@/firebase/firebaseConfig'; // Import Firebase Firestore
-import { collection, addDoc } from 'firebase/firestore'; // Import Firestore functions
+import { collection, addDoc, doc, getDoc, updateDoc } from 'firebase/firestore'; // Import Firestore functions
 import { getAuth } from 'firebase/auth'; // Import Firebase Auth
 import Sidebar from '@/components/Sidebar.vue';
 
@@ -223,6 +223,18 @@ const removeImage = (index) => {
     product.value.images.splice(index, 1);
 };
 
+const fetchProduct = async (productId) => {
+    const productRef = doc(db, 'products', productId);
+    const productSnap = await getDoc(productRef);
+
+    if (productSnap.exists()) {
+        product.value = { ...productSnap.data(), id: productSnap.id };
+    } else {
+        alert('Product not found');
+        router.push('/products');
+    }
+};
+
 const saveProduct = async () => {
     const user = auth.currentUser; // Get the currently logged-in user
     if (!user) {
@@ -231,13 +243,22 @@ const saveProduct = async () => {
     }
 
     try {
-        // Add the product to Firestore with the userId
-        await addDoc(collection(db, 'products'), {
-            ...product.value,
-            userId: user.uid, // Include the userId in the product data
-        });
-
-        alert('Product saved successfully!');
+        if (isEditing.value) {
+            // Update the product in Firestore
+            const productRef = doc(db, 'products', product.value.id);
+            await updateDoc(productRef, {
+                ...product.value,
+                userId: user.uid, // Include the userId in the product data
+            });
+            alert('Product updated successfully!');
+        } else {
+            // Add the product to Firestore with the userId
+            await addDoc(collection(db, 'products'), {
+                ...product.value,
+                userId: user.uid, // Include the userId in the product data
+            });
+            alert('Product saved successfully!');
+        }
         router.push('/products'); // Redirect to the products page
     } catch (error) {
         console.error('Error saving product:', error);
@@ -248,7 +269,14 @@ const saveProduct = async () => {
 const cancelEdit = () => {
     router.push('/farm-products');
 };
-  </script>
+
+// Fetch product data if in edit mode
+onMounted(() => {
+    if (isEditing.value && route.params.productId) {
+        fetchProduct(route.params.productId);
+    }
+});
+</script>
   
   <style scoped>
   .dashboard-container {
