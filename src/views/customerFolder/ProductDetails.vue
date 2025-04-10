@@ -1,71 +1,23 @@
 <template>
   <div class="product-details">
+    <!-- Header Section -->
     <div class="header">
       <button class="back-button" @click="$emit('navigate', '/')">
         <ChevronLeft size="22" />
       </button>
       <h1>Product Details</h1>
+      
       <div class="header-buttons">
+        <p class="farm-name" v-if="farmName">{{ farmName }}</p>
         <button class="icon-button" @click="toggleCart">
           <ShoppingCart size="18" />
         </button>
         <button class="icon-button" @click="toggleProfileMenu" ref="profileRef">
           <User size="18" />
         </button>
-        
-        <!-- Profile Dropdown Menu -->
+
         <div class="profile-dropdown" v-if="showProfileMenu">
-          <div class="profile-header">
-            <div class="profile-avatar">
-              <img :src="userPhotoURL" alt="User avatar" />
-            </div>
-            <div class="profile-user-info">
-                <h3>{{ username }}</h3> 
-                <p>{{ userEmail }}</p>
-            </div>
-          </div>
-          
-          <div class="profile-actions">
-            <button class="become-supplier-btn">
-              <Briefcase size="16" />
-              Become a Farmer/Supplier
-            </button>
-          </div>
-          
-          <div class="profile-menu">
-            <button class="menu-item">
-              <UserCog size="16" />
-              Edit Profile
-            </button>
-            <button class="menu-item">
-              <Settings size="16" />
-              Account Settings
-            </button>
-            <button class="menu-item">
-              <MapPin size="16" />
-              Shipping Address
-            </button>
-            <button class="menu-item">
-              <FileText size="16" />
-              Terms and Conditions
-            </button>
-            <button class="menu-item">
-              <Shield size="16" />
-              Privacy Policy
-            </button>
-            <button class="menu-item">
-              <Star size="16" />
-              Rate this App
-            </button>
-            <button class="menu-item">
-              <Share2 size="16" />
-              Share this App
-            </button>
-            <button class="menu-item logout">
-              <LogOut size="16" />
-              Logout
-            </button>
-          </div>
+          <!-- Profile Dropdown Content -->
         </div>
       </div>
     </div>
@@ -75,7 +27,7 @@
       <img v-if="productImage" :src="productImage" alt="Product" class="product-image">
       <div v-else class="placeholder-image">No Image Available</div>
     </div>
-    
+  
     <!-- Product Information -->
     <div class="product-info">
       <div class="product-header">
@@ -87,18 +39,16 @@
         </button>
       </div>
       
-      <!-- Price and Stock -->
       <div class="price-section">
-        <h3 class="price">${{ computedPrice }}</h3>
-        <p class="stock">Stock: {{ computedStock }}</p>
+        <h3 class="price">₱{{ computedPrice }}</h3>
+        <p class="stock">Quantity: {{ computedStock }}</p>
       </div>
       
-      <!-- Description -->
       <div class="guarantee">
+        <span><MapPin size="16" /> {{ farmName }}</span>
         <p>{{ productDescription }}</p>
       </div>
       
-      <!-- Quantity and Add to Cart -->
       <div class="quantity-section">
         <button class="quantity-button decrease" @click="decreaseQuantity">
           <Minus size="16" />
@@ -108,13 +58,48 @@
           <Plus size="16" />
         </button>
         
-        <button class="add-to-cart" @click="addToCart">
+        <button class="add-to-cart" @click="showAddToCartModal">
           <ShoppingCart size="16" />
           Add to cart
         </button>
+
+        <button class="buy-now-button" @click="showBuyNowModal">
+          Buy Now
+        </button>
       </div>
-      
-      <!-- Related Products -->
+
+      <ProductModal
+        v-if="showAddToCartModalVisible"
+        :visible="showAddToCartModalVisible"
+        :productName="productName"
+        :productImage="productImage"
+        :category="product.category"
+        :initialPackagingType="'plastic'"
+        :initialWeight="1"
+        :pricePerKg="productPrice"
+        :sellerId="product.sellerId" 
+        :userId="userId"
+        :username="username"
+        @confirm="handleAddToCartConfirm"
+        @close="closeAddToCartModal"
+      />
+
+      <ProductModal
+        v-if="showBuyNowModalVisible"
+        :visible="showBuyNowModalVisible"
+        :productName="productName"
+        :productImage="productImage"
+        :category="product.category"
+        :initialPackagingType="'plastic'"
+        :initialWeight="1"
+        :pricePerKg="productPrice"
+        :sellerId="product.sellerId" 
+        :userId="userId"
+        :username="username"
+        @confirm="handleBuyNowConfirm"
+        @close="closeBuyNowModal"
+      />
+
       <div class="related-products">
         <h3>You might also like</h3>
         <div class="related-products-grid">
@@ -132,11 +117,19 @@
     </div>
     
     <bottom-navigation active-tab="home" @navigate="$emit('navigate', $event)" @tab-change="handleTabChange" />
+
+    <Notification 
+      :message="notificationMessage"
+      :type="notificationType"
+      :visible="showNotification"
+    />
   </div>
 </template>
 
 <script>
+import Notification from '@/components/Notification.vue'; 
 import BottomNavigation from '@/components/BottomNavigation.vue';
+import ProductModal from '@/components/ProductModal.vue';
 import { 
   ChevronLeft, 
   ShoppingCart, 
@@ -154,12 +147,14 @@ import {
   Briefcase,
   MapPin
 } from 'lucide-vue-next';
-import { onMounted, ref } from 'vue';
-import { auth, db } from '@/firebase/firebaseConfig'; // Import Firestore
-import { doc, getDoc, collection, getDocs } from 'firebase/firestore'; // Import Firestore functions
+import { doc, getDoc, collection, getDocs } from 'firebase/firestore';
+import { auth, db } from '@/firebase/firebaseConfig';
+import { useRouter } from 'vue-router';
 
 export default {
   components: {
+    Notification,
+    ProductModal,
     BottomNavigation,
     ChevronLeft,
     ShoppingCart,
@@ -177,6 +172,10 @@ export default {
     Briefcase,
     MapPin
   },
+  setup() {
+    const router = useRouter();
+    return { router };
+  },
   props: {
     productId: {
       type: String,
@@ -185,13 +184,21 @@ export default {
   },
   data() {
     return {
-      product: null, // Holds the product data
-      relatedProducts: [], // Holds related products
-      username: '', // User's username from Firestore
-      userEmail: '', // User's email
-      userPhotoURL: '', // User's photo URL
-      showProfileMenu: false, // Controls profile dropdown visibility
-      quantity: 1, // Quantity selected by the user
+      farmName: '',
+      showNotification: false,
+      notificationMessage: '',
+      notificationType: 'success',
+      notificationTimeout: null,
+      product: null,
+      userId: '',
+      relatedProducts: [],
+      username: '',
+      userEmail: '',
+      userPhotoURL: '',
+      showProfileMenu: false,
+      quantity: 1,
+      showAddToCartModalVisible: false,
+      showBuyNowModalVisible: false
     };
   },
   computed: {
@@ -199,61 +206,112 @@ export default {
       return this.product ? this.product.productName : 'Loading...';
     },
     productImage() {
-      return this.product?.image || ''; // Use an empty string or a placeholder image URL
+      return this.product?.image || '';
     },
     productPrice() {
-      return this.product ? this.product.price : 0; // Default to 0 if not loaded
+      return this.product ? this.product.price : 0;
     },
     productStock() {
-      return this.product ? this.product.stock : 0; // Default to 0 if not loaded
+      return this.product ? this.product.stock : 0;
     },
     productDescription() {
       return this.product ? this.product.description : 'Loading...';
     },
     computedPrice() {
-      // Calculate the total price based on quantity
       return this.productPrice * this.quantity;
     },
     computedStock() {
-      // Calculate the remaining stock based on quantity
       return this.productStock - this.quantity;
     }
   },
   methods: {
-    async fetchUserInfo() {
-      const user = auth.currentUser;
-      if (user) {
-        this.userPhotoURL = user.photoURL || 'https://randomuser.me/api/portraits/men/32.jpg'; // Default image if no photoURL
-        this.userEmail = user.email;
+    handleAddToCartConfirm(data) {
+      this.closeAddToCartModal();
+      this.showNotificationMessage('Item added to cart', 'success');
+    },
+    handleBuyNowConfirm(data) {
+      this.closeBuyNowModal();
+      this.router.push({
+        name: 'Checkout',
+        query: {
+          productId: this.productId,
+          productName: this.productName,
+          productImage: this.productImage,
+          weight: data.weight,
+          packagingType: data.packagingType,
+          totalPrice: data.totalPrice,
+          sellerId: data.sellerId,
+          pricePerKg: this.productPrice
+        }
+      });
+    },
+    
+    showNotificationMessage(message, type) {
+      this.notificationMessage = message;
+      this.notificationType = type;
+      this.showNotification = true;
+      
+      if (this.notificationTimeout) {
+        clearTimeout(this.notificationTimeout);
+      }
+      
+      this.notificationTimeout = setTimeout(() => {
+        this.showNotification = false;
+      }, 5000);
+    },
 
-        // Fetch the username from Firestore
-        const userDocRef = doc(db, 'users', user.uid);
-        const userDoc = await getDoc(userDocRef);
-        if (userDoc.exists()) {
-          this.username = userDoc.data().username; // Set the username from Firestore
-        } else {
-          console.log('No such document!');
+    async fetchFarmName() {
+      if (this.product && this.product.sellerId) {
+        try {
+          const sellerDocRef = doc(db, 'sellers', this.product.sellerId);
+          const sellerDoc = await getDoc(sellerDocRef);
+          if (sellerDoc.exists()) {
+            this.farmName = sellerDoc.data().farmName;
+          }
+        } catch (error) {
+          console.error('Failed to fetch farm name:', error);
         }
       }
     },
+
     async fetchProduct() {
-      if (!this.productId) {
-        console.error('Product ID is undefined. Cannot fetch product details.');
-        return;
-      }
+      if (!this.productId) return;
 
       try {
-        console.log('Fetching product with ID:', this.productId); // Debugging
         const productDocRef = doc(db, 'products', this.productId);
         const productDoc = await getDoc(productDocRef);
         if (productDoc.exists()) {
           this.product = productDoc.data();
-          console.log('Product data:', this.product); // Debugging
-        } else {
-          console.log('No such product!');
+          await this.fetchFarmName();
         }
       } catch (error) {
         console.error('Failed to fetch product:', error);
+      }
+    },
+
+    showAddToCartModal() {
+      this.showAddToCartModalVisible = true;
+    },
+    showBuyNowModal() {
+      this.showBuyNowModalVisible = true;
+    },
+    closeAddToCartModal() {
+      this.showAddToCartModalVisible = false;
+    },
+    closeBuyNowModal() {
+      this.showBuyNowModalVisible = false;
+    },
+    async fetchUserInfo() {
+      const user = auth.currentUser;
+      if (user) {
+        this.userPhotoURL = user.photoURL || 'https://randomuser.me/api/portraits/men/32.jpg';
+        this.userEmail = user.email;
+
+        const userDocRef = doc(db, 'users', user.uid);
+        const userDoc = await getDoc(userDocRef);
+        if (userDoc.exists()) {
+          this.username = userDoc.data().username;
+        }
       }
     },
     async fetchRelatedProducts() {
@@ -261,32 +319,26 @@ export default {
         const productsCollection = collection(db, 'products');
         const productsSnapshot = await getDocs(productsCollection);
         this.relatedProducts = productsSnapshot.docs
-          .filter(doc => doc.id !== this.productId) // Exclude the current product
-          .map(doc => ({ id: doc.id, ...doc.data() })); // Include the document ID
+          .filter(doc => doc.id !== this.productId)
+          .map(doc => ({ id: doc.id, ...doc.data() }));
       } catch (error) {
         console.error('Failed to fetch related products:', error);
       }
     },
     viewProduct(product) {
-      console.log('Product object:', product); // Debugging
       const productId = product.id || product.productId;
-      if (!productId) {
-        console.error('Product ID is undefined. Cannot navigate to product details.');
-        return;
+      if (productId) {
+        this.$router.push({ path: `/product/${productId}` });
       }
-      // Navigate to the product details with the selected product
-      this.$router.push({ path: `/product/${productId}` });
-    },
+    },  
     toggleProfileMenu() {
       this.showProfileMenu = !this.showProfileMenu;
     },
     toggleCart() {
       console.log('Cart toggled');
-      // Implement cart toggle functionality
     },
     handleTabChange(tab) {
       console.log(`Changed to tab: ${tab}`);
-      // Handle tab change logic here
     },
     increaseQuantity() {
       if (this.quantity < this.productStock) {
@@ -299,32 +351,42 @@ export default {
       if (this.quantity > 1) {
         this.quantity--;
       }
-    },
-    addToCart() {
-      if (this.quantity > this.productStock) {
-        alert('Not enough stock available.');
-        return;
-      }
-      // Add the product to the cart with the selected quantity
-      console.log(`Added ${this.quantity} of ${this.productName} to cart.`);
-      // You can implement your cart logic here
     }
   },
-  mounted() {
-    console.log('Product ID:', this.productId); // Debugging: Check if productId is defined
-    if (!this.productId) {
-      console.error('Product ID is undefined. Cannot fetch product details.');
-      return;
+  async mounted() {
+    if (!this.productId) return;
+
+    const user = auth.currentUser;
+    if (user) {
+      this.userId = user.uid;
+      const userDocRef = doc(db, 'users', user.uid);
+      const userDoc = await getDoc(userDocRef);
+      if (userDoc.exists()) {
+        this.username = userDoc.data().username;
+      }
     }
-    this.fetchUserInfo();
-    this.fetchProduct();
-    this.fetchRelatedProducts();
+
+    await this.fetchUserInfo();
+    await this.fetchProduct();
+    await this.fetchRelatedProducts();
   }
-}
+};
 </script>
 
-
   <style scoped>
+ .farm-name {
+  font-size: 14px;
+  color: white;
+  margin-right: 10px;
+}
+
+.product-image-container {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start; /* Align farm name to left */
+  padding: 15px;
+}
+
   .product-details {
     height: 100%;
     display: flex;
@@ -686,6 +748,24 @@ export default {
   .add-to-cart {
     flex: 1;
     height: 45px;
+    background-color: #ffffff;
+    color: rgb(2, 2, 2);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    font-weight: 600;
+    box-shadow: 0 3px 8px rgba(46, 92, 49, 0.3);
+    transition: all 0.2s ease;
+  }
+  
+  .add-to-cart:hover {
+    background-color: #2e5c31;
+  }
+  .buy-now-button {
+    flex: 1;
+    height: 45px;
     background-color: #2e5c31;
     color: white;
     border-radius: 10px;
@@ -698,9 +778,10 @@ export default {
     transition: all 0.2s ease;
   }
   
-  .add-to-cart:hover {
+  .buy-now-button:hover {
     background-color: #26492a;
   }
+  
   
   .related-products {
     margin-top: 20px;
@@ -762,4 +843,173 @@ export default {
     font-weight: 700;
     color: #2e5c31;
   }
+
+  .product-details {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background-color: #f9f9f9;
+  padding-bottom: 80px;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 15px;
+  background-color: #2e5c31;
+  color: white;
+}
+
+.header h1 {
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.product-image-container {
+  height: 250px;
+  background-color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.product-image {
+  max-width: 80%;
+  max-height: 80%;
+  object-fit: contain;
+}
+
+.product-info {
+  padding: 20px 15px;
+}
+
+.product-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 15px;
+}
+
+.product-header h2 {
+  font-size: 1.3rem;
+  font-weight: 600;
+  color: #333;
+}
+
+.price-section {
+  margin-bottom: 20px;
+}
+
+.price {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #2e5c31;
+}
+
+.stock {
+  color: #666;
+  font-size: 0.9rem;
+}
+
+.guarantee {
+  background-color: white;
+  padding: 15px;
+  border-radius: 10px;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.guarantee p {
+  color: #555;
+  line-height: 1.5;
+  font-size: 0.95rem;
+}
+
+.quantity-section {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.quantity-button {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: white;
+  border: 1px solid #e0e0e0;
+  color: #2e5c31;
+}
+
+.quantity {
+  font-size: 1.1rem;
+  width: 30px;
+  text-align: center;
+}
+
+.add-to-cart, .buy-now-button {
+  flex: 1;
+  height: 48px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 500;
+  gap: 8px;
+}
+
+.add-to-cart {
+  background-color: white;
+  color: #2e5c31;
+  border: 1px solid #2e5c31;
+}
+
+.buy-now-button {
+  background-color: #2e5c31;
+  color: white;
+}
+
+.related-products {
+  margin-top: 25px;
+}
+
+.related-products h3 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-bottom: 15px;
+  color: #333;
+}
+
+.related-products-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.related-product {
+  background-color: white;
+  border-radius: 10px;
+  padding: 12px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+}
+
+.related-product-image img {
+  width: 100%;
+  border-radius: 6px;
+}
+
+.related-product-info h4 {
+  font-size: 0.9rem;
+  margin: 8px 0 4px;
+}
+
+.related-price {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #2e5c31;
+}
   </style>

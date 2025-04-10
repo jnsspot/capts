@@ -38,18 +38,19 @@
         <table>
           <thead>
             <tr>
-              <th>Seller ID</th>
               <th>Name</th>
               <th>Email</th>
-              <th>Products</th>
+              <th>Farm Name</th>
+              <th>Farm Address</th>
+              <th>Farm Type</th>
               <th>Total Sales</th>
-              <th>Status</th>
+              <th>Registration Status</th>
+              <th>Verification Status</th>
               <th>Actions</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="seller in sellers" :key="seller.id">
-              <td>{{ seller.id }}</td>
               <td>
                 <div class="seller-info">
                   <div class="seller-name">{{ seller.firstName }} {{ seller.lastName }}</div>
@@ -57,23 +58,31 @@
                 </div>
               </td>
               <td>{{ seller.email }}</td>
-              <td>{{ seller.products || 0 }}</td>
+              <td>{{ seller.farmName || 'N/A' }}</td>
+              <td>{{ seller.farmAddress || 'N/A' }}</td>
+              <td>{{ seller.farmType || 'N/A' }}</td>
               <td>${{ seller.totalSales?.toLocaleString() || '0' }}</td>
               <td>
-                <span :class="['status-badge', seller.status?.toLowerCase() || 'unknown']">
-                  {{ seller.status || 'Unknown' }}
+                <div class="custom-dropdown">
+                  <select 
+                    v-model="seller.registrationStatus" 
+                    @change="updateRegistrationStatus(seller)"
+                  >
+                    <option value="Pending">Pending</option>
+                    <option value="Accept">Accept</option>
+                    <option value="Decline">Decline</option>
+                  </select>
+                  <i class="fas fa-chevron-down dropdown-icon"></i>
+                </div>
+              </td>
+              <td>
+                <span :class="['status-badge', seller.verificationStatus?.toLowerCase() || 'unknown']">
+                  {{ seller.verificationStatus || 'Unknown' }}
                 </span>
               </td>
               <td class="actions-cell">
                 <button class="btn-info" @click="navigateToSellerDetails(seller.id)">
                   <i class="fas fa-info-circle"></i> Details
-                </button>
-                <button 
-                  class="btn-approve" 
-                  @click="updateStatus(seller)" 
-                  v-if="seller.status === 'Pending'"
-                >
-                  <i class="fas fa-check"></i> Approve
                 </button>
               </td>
             </tr>
@@ -94,30 +103,58 @@ import { collection, getDocs, doc, updateDoc } from "firebase/firestore";
 const router = useRouter();
 const sellers = ref([]);
 
-const activeSellers = computed(() => sellers.value.filter(s => s.status === 'Active').length);
-const pendingSellers = computed(() => sellers.value.filter(s => s.status === 'Pending').length);
+const activeSellers = computed(() => sellers.value.filter(s => s.registrationStatus === 'Active').length);
+const pendingSellers = computed(() => sellers.value.filter(s => s.registrationStatus === 'Pending').length);
 
 const fetchSellers = async () => {
   try {
     const querySnapshot = await getDocs(collection(db, "sellers"));
-    sellers.value = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    sellers.value = querySnapshot.docs.map(doc => {
+      const sellerData = doc.data();
+      return { 
+        id: doc.id, 
+        registrationStatus: sellerData.registrationStatus || 'Pending', // Default registration status
+        verificationStatus: sellerData.isSeller ? 'Verified' : 'Pending', // Default verification status
+        ...sellerData 
+      };
+    });
   } catch (error) {
     console.error("Error fetching sellers:", error);
   }
 };
 
 const navigateToSellerDetails = (sellerId) => {
-  console.log("Navigating to seller details:", sellerId); // Add this for debugging
   router.push(`/admin/sellers/${sellerId}`);
 };
 
-const updateStatus = async (seller) => {
+const updateRegistrationStatus = async (seller) => {
   try {
+    // Update the user's role and isSeller status in the users collection
     const userRef = doc(db, "users", seller.userId);
-    await updateDoc(userRef, { role: "seller", isSeller: true });
+    await updateDoc(userRef, { 
+      role: "seller", 
+      isSeller: true 
+    });
+
+    // Update the seller's status, isVerified, and verificationStatus in the sellers collection
+    const sellerRef = doc(db, "sellers", seller.id);
+    await updateDoc(sellerRef, { 
+      status: "Active",
+      registrationStatus: "Active", // Update registration status
+      isVerified: true, // Set isVerified to true
+      verificationStatus: "Verified", // Set verificationStatus to "Verified"
+    });
+
+    // Update the local state to reflect the new status
     seller.status = "Active";
+    seller.registrationStatus = "Active";
+    seller.isVerified = true;
+    seller.verificationStatus = "Verified";
+
+    alert("Seller approved and verified successfully!");
   } catch (error) {
-    console.error("Error updating user role:", error);
+    console.error("Error updating user role or seller status:", error);
+    alert("Failed to approve seller. Please try again.");
   }
 };
 
@@ -136,6 +173,7 @@ onMounted(fetchSellers);
 .main-content {
   flex: 1;
   padding: 2rem;
+  margin-left: 260px; /* Adjust this value to match the width of the sidebar */
 }
 
 .page-title {
@@ -271,6 +309,47 @@ tr:hover {
   margin-top: 0.25rem;
 }
 
+/* Custom dropdown styles */
+.custom-dropdown {
+  position: relative;
+  display: inline-block;
+  width: 100%;
+}
+
+.custom-dropdown select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  width: 100%;
+  padding: 0.5rem 2rem 0.5rem 1rem;
+  border: 1px solid #e9ecef;
+  border-radius: 6px;
+  background-color: white;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.custom-dropdown select:focus {
+  outline: none;
+  border-color: #3498db;
+  box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+}
+
+.custom-dropdown select:disabled {
+  background-color: #f8f9fa;
+  cursor: not-allowed;
+}
+
+.custom-dropdown .dropdown-icon {
+  position: absolute;
+  right: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: #6c757d;
+}
+
 /* Status badge styles */
 .status-badge {
   padding: 0.35rem 0.75rem;
@@ -281,19 +360,19 @@ tr:hover {
   display: inline-block;
 }
 
-.status-badge.active {
+.status-badge.verified {
   background-color: #d4edda;
   color: #155724;
-}
-
-.status-badge.inactive {
-  background-color: #f8d7da;
-  color: #721c24;
 }
 
 .status-badge.pending {
   background-color: #fff3cd;
   color: #856404;
+}
+
+.status-badge.declined {
+  background-color: #f8d7da;
+  color: #721c24;
 }
 
 .status-badge.unknown {
@@ -307,7 +386,7 @@ tr:hover {
   gap: 0.5rem;
 }
 
-.btn-info, .btn-approve {
+.btn-info {
   padding: 0.5rem 1rem;
   border: none;
   border-radius: 6px;
@@ -318,23 +397,11 @@ tr:hover {
   gap: 0.5rem;
   transition: all 0.2s ease;
   font-size: 0.8rem;
-}
-
-.btn-info {
   background-color: #17a2b8;
   color: white;
 }
 
 .btn-info:hover {
   background-color: #138496;
-}
-
-.btn-approve {
-  background-color: #28a745;
-  color: white;
-}
-
-.btn-approve:hover {
-  background-color: #218838;
 }
 </style>

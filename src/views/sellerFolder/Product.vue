@@ -29,7 +29,7 @@
                         <div v-if="menuIndex === index" class="menu">
                             <p @click="editProduct(product)">Edit</p>
                             <p @click="hideProduct(product)">Hide</p>
-                            <p @click="showDeleteModal(product.id)">Delete</p>
+                            <p @click="deleteProduct(product.id)">Delete</p>
                         </div>
                     </div>
                 </div>
@@ -58,7 +58,7 @@
                             <div v-if="menuIndex === index" class="menu">
                                 <p @click="editProduct(product)">Edit</p>
                                 <p @click="hideProduct(product)">Hide</p>
-                                <p @click="showDeleteModal(product.id)">Delete</p>
+                                <p @click="deleteProduct(product.id)">Delete</p>
                             </div>
                         </td>
                     </tr>
@@ -76,13 +76,6 @@
             <router-link to="/sales"><i class="fas fa-chart-line"></i></router-link>
             <router-link to="/notifications"><i class="fas fa-bell"></i></router-link>
         </div>
-
-        <!-- Custom Modal -->
-        <ConfirmModal
-            :isVisible="isDeleteModalVisible"
-            @confirm="handleDelete"
-            @cancel="hideDeleteModal"
-        />
     </div>
 </template>
 
@@ -91,46 +84,45 @@ import { ref, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { db } from "../../firebase/firebaseConfig";
 import { collection, getDocs, deleteDoc, doc, query, where } from "firebase/firestore";
-import { getAuth, onAuthStateChanged } from "firebase/auth";
-import ConfirmModal from "@/components/ConfirmModal.vue"; // Import the custom modal
+import { getAuth, onAuthStateChanged } from "firebase/auth"; // Import onAuthStateChanged
 
 export default {
     name: "Product",
-    components: {
-        ConfirmModal,
-    },
     setup() {
         const router = useRouter();
         const products = ref([]);
         const menuIndex = ref(null);
         const isMobile = ref(window.innerWidth <= 768);
-        const auth = getAuth();
-        const isDeleteModalVisible = ref(false);
-        const productIdToDelete = ref(null);
+        const auth = getAuth(); // Initialize Firebase Auth
 
+        // Check both localStorage and sessionStorage for userId
         const getUserIdFromStorage = () => {
-            return localStorage.getItem("userId") || sessionStorage.getItem("userId");
+            return localStorage.getItem("userId") || sessionStorage.getItem("userId"); // Check both storages
         };
 
+        // Save userId to both localStorage and sessionStorage
         const saveUserIdToStorage = (userId) => {
             localStorage.setItem("userId", userId);
             sessionStorage.setItem("userId", userId);
         };
 
+        // Clear userId from both localStorage and sessionStorage
         const clearUserIdFromStorage = () => {
             localStorage.removeItem("userId");
             sessionStorage.removeItem("userId");
         };
 
+        // Check if the user is logged in and fetch products
         const fetchProducts = async () => {
-            const userId = getUserIdFromStorage();
+            const userId = getUserIdFromStorage(); // Get userId from either localStorage or sessionStorage
             if (!userId) {
                 alert("You must be logged in to view products.");
-                router.push("/login");
+                router.push("/login"); // Redirect to login if no userId is found
                 return;
             }
 
             try {
+                // Fetch products only for the logged-in user
                 const q = query(collection(db, "products"), where("userId", "==", userId));
                 const querySnapshot = await getDocs(q);
                 products.value = querySnapshot.docs.map((doc) => ({
@@ -143,13 +135,16 @@ export default {
             }
         };
 
+        // Listen for authentication state changes
         const checkAuthState = () => {
             onAuthStateChanged(auth, (user) => {
                 if (user) {
+                    // User is logged in, save userId to both localStorage and sessionStorage
                     saveUserIdToStorage(user.uid);
                 } else {
+                    // User is logged out, clear userId from both localStorage and sessionStorage
                     clearUserIdFromStorage();
-                    router.push("/login");
+                    router.push("/login"); // Redirect to login page
                 }
             });
         };
@@ -164,58 +159,35 @@ export default {
 
         const editProduct = (product) => {
             console.log("Edit product:", product);
-            router.push(`/edit-product/${product.id}`);
+            router.push(`/edit-product/${product.id}`); // Example: Navigate to edit page
         };
 
         const hideProduct = (product) => {
             console.log("Hide product:", product);
+            // Implement hide functionality if needed
         };
 
-        const showDeleteModal = (id) => {
-            productIdToDelete.value = id;
-            isDeleteModalVisible.value = true;
-        };
-
-        const hideDeleteModal = () => {
-            isDeleteModalVisible.value = false;
-            productIdToDelete.value = null;
-        };
-
-        const handleDelete = async () => {
-            if (productIdToDelete.value) {
+        const deleteProduct = async (id) => {
+            if (confirm("Are you sure you want to delete this product?")) {
                 try {
-                    await deleteDoc(doc(db, "products", productIdToDelete.value));
-                    fetchProducts();
+                    await deleteDoc(doc(db, "products", id));
+                    fetchProducts(); // Refresh the product list after deletion
                 } catch (error) {
                     console.error("Error deleting product:", error);
                     alert("Failed to delete product.");
-                } finally {
-                    hideDeleteModal();
                 }
             }
         };
 
         onMounted(() => {
-            checkAuthState();
-            fetchProducts();
+            checkAuthState(); // Check authentication state on component mount
+            fetchProducts(); // Fetch products after checking auth state
             window.addEventListener("resize", () => {
                 isMobile.value = window.innerWidth <= 768;
             });
         });
 
-        return {
-            products,
-            menuIndex,
-            isMobile,
-            isDeleteModalVisible,
-            goToAddProduct,
-            toggleMenu,
-            editProduct,
-            hideProduct,
-            showDeleteModal,
-            hideDeleteModal,
-            handleDelete,
-        };
+        return { products, menuIndex, isMobile, goToAddProduct, toggleMenu, editProduct, hideProduct, deleteProduct };
     },
 };
 </script>

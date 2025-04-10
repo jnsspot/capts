@@ -26,8 +26,8 @@
     </button>
     <button 
       class="nav-item" 
-      :class="{ active: activeTab === '/customer-orders' }"
-      @click="navigate('/customer-orders')"
+      :class="{ active: activeTab === '/customer-order' }"
+      @click="navigate('/customer-order')"
     >
       <Package :size="iconSize" />
       <span>Orders</span>
