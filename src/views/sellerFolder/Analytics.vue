@@ -317,12 +317,15 @@
   <script setup>
   import { ref, onMounted, computed, watch } from 'vue';
   import { useRouter } from 'vue-router';
-  import { db } from '@/firebase/firebaseConfig';
-  import { collection, getDocs } from 'firebase/firestore';
+  import { db, auth } from '@/firebase/firebaseConfig';
+  import { collection, getDocs, query, where } from 'firebase/firestore';
   import Sidebar from '@/components/Sidebar.vue';
   import Chart from 'chart.js/auto';
   
   const router = useRouter();
+  
+  // Current seller ID
+  const currentSellerId = ref('');
   
   // Dashboard data
   const timeRange = ref('month');
@@ -440,11 +443,17 @@
     }
   };
   
-  // Fetch orders from Firebase
+  // Fetch orders from Firebase - filtered by sellerId
   const fetchOrders = async () => {
     try {
-      const ordersCollection = collection(db, "orders");
-      const ordersSnapshot = await getDocs(ordersCollection);
+      if (!currentSellerId.value) return;
+      
+      const ordersQuery = query(
+        collection(db, "orders"),
+        where("sellerId", "==", currentSellerId.value)
+      );
+      
+      const ordersSnapshot = await getDocs(ordersQuery);
       const ordersList = [];
       
       let totalSalesValue = 0;
@@ -463,7 +472,7 @@
         totalSalesValue += orderData.totalPrice || 0;
         
         // Calculate profit (using actual cost if available, otherwise 30% margin)
-        const cost = orderData.cost || (orderData.totalPrice * 0.7); // Default to 30% margin if cost not available
+        const cost = orderData.cost || (orderData.totalPrice * 0.7);
         const profit = orderData.totalPrice - cost;
         totalProfitValue += profit;
         
@@ -495,11 +504,17 @@
     }
   };
   
-  // Fetch products from Firebase
+  // Fetch products from Firebase - filtered by sellerId
   const fetchProducts = async () => {
     try {
-      const productsCollection = collection(db, "products");
-      const productsSnapshot = await getDocs(productsCollection);
+      if (!currentSellerId.value) return;
+      
+      const productsQuery = query(
+        collection(db, "products"),
+        where("sellerId", "==", currentSellerId.value)
+      );
+      
+      const productsSnapshot = await getDocs(productsQuery);
       const productsList = [];
       
       let totalInventoryValue = 0;
@@ -539,7 +554,7 @@
     
     orders.value.forEach(order => {
       if (!productSales[order.productName]) {
-        const cost = order.cost || (order.totalPrice * 0.7); // Default to 30% margin if cost not available
+        const cost = order.cost || (order.totalPrice * 0.7);
         const profit = order.totalPrice - cost;
         
         productSales[order.productName] = {
@@ -687,8 +702,8 @@
     const monthlyProfit = {};
     
     orders.forEach(order => {
-      if (order.timestamp) {
-        const date = order.timestamp.toDate();
+      if (order.createdAt) {
+        const date = order.createdAt.toDate();
         const month = date.getMonth();
         const year = date.getFullYear();
         const key = `${year}-${month}`;
@@ -707,12 +722,12 @@
     // Prepare data for sales chart
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const revenueData = months.map((_, index) => {
-      const key = `2025-${index}`; // Adjust year as needed
+      const key = `2025-${index}`;
       return monthlySales[key] || 0;
     });
     
     const profitData = months.map((_, index) => {
-      const key = `2025-${index}`; // Adjust year as needed
+      const key = `2025-${index}`;
       return monthlyProfit[key] || 0;
     });
     
@@ -768,12 +783,18 @@
   
   // Initialize charts when component is mounted
   onMounted(() => {
-    setTimeout(() => {
-      chartsInitialized.value = true;
-      initSalesChart([], [], []);
-      initCategoryChart([], []);
-      updateDashboardData();
-    }, 100);
+    // Get current user/seller ID
+    auth.onAuthStateChanged((user) => {
+      if (user) {
+        currentSellerId.value = user.uid;
+        setTimeout(() => {
+          chartsInitialized.value = true;
+          initSalesChart([], [], []);
+          initCategoryChart([], []);
+          updateDashboardData();
+        }, 100);
+      }
+    });
   });
   </script>
 

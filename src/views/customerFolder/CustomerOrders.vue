@@ -53,7 +53,7 @@
         <div class="order-card" v-for="(order, index) in filteredOrders" :key="index">
           <div class="order-header">
             <div>
-              <h3>Order #{{ order.orderId }}</h3>
+              <h3>Order #{{ order.orderCode }}</h3>
               <p class="order-date">{{ formatDate(order.createdAt) }}</p>
             </div>
             <div class="order-status" :class="order.status.toLowerCase()">
@@ -155,7 +155,7 @@ export default {
         orders.value = querySnapshot.docs.map(doc => {
           const data = doc.data();
           return {
-            orderId: data.orderId,
+            orderCode: data.orderCode,
             productImage: data.productImage,
             productName: data.productName,
             weight: data.weight,

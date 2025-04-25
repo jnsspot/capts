@@ -58,15 +58,41 @@
 
       <div class="content-wrapper">
         <div class="actions-bar">
-          <div class="search-container">
-            <div class="search-box">
-              <i class="i-lucide-search search-icon"></i>
-              <input type="text" placeholder="Search orders..." v-model="searchQuery" />
-              <button v-if="searchQuery" class="clear-search" @click="searchQuery = ''">
+        <div class="search-and-filter">
+          <div class="search-box">
+            <i class="i-lucide-search search-icon"></i>
+            <input type="text" placeholder="Search orders..." v-model="searchQuery" />
+            <button v-if="searchQuery" class="clear-search" @click="searchQuery = ''">
+              <i class="i-lucide-x"></i>
+            </button>
+          </div>
+          
+          <div class="date-filter-container">
+            <div class="date-filter">
+              <i class="i-lucide-calendar"></i>
+              <input 
+                type="date" 
+                v-model="selectedDate" 
+                @change="filterByDate"
+                class="minimal-date-input"
+              />
+              <input 
+                type="time" 
+                v-model="selectedTime" 
+                @change="filterByDate" 
+                v-if="selectedDate"
+                class="minimal-time-input"
+              />
+              <button 
+                v-if="selectedDate || selectedTime" 
+                @click="resetDateFilter" 
+                class="minimal-reset-btn"
+              >
                 <i class="i-lucide-x"></i>
               </button>
             </div>
           </div>
+        </div>
           <div class="filter-actions">
             <div class="filter-dropdown">
               <button class="filter-btn" @click="toggleFilterDropdown">
@@ -94,7 +120,7 @@
         <table class="orders-table">
           <thead>
             <tr>
-              <th>Order ID</th>
+              <th>Order Code</th>
               <th>Customer</th>
               <th>Location</th>
               <th>Date</th>
@@ -105,7 +131,8 @@
           </thead>
           <tbody>
             <tr v-for="(order, index) in paginatedOrders" :key="order.id">
-              <td class="order-id">#{{ order.id }}</td>
+              <td class="order-id" v-if="order.orderCode">#{{ order.orderCode }}</td>
+              <td class="order-id" v-else>N/A</td>
               <td>{{ order.username }}</td>
               <td>
                 <div class="location-cell">
@@ -113,7 +140,7 @@
                   <span>{{ order.Location }}</span>
                 </div>
               </td>
-              <td>{{ formatDate(order.timestamp) }}</td>
+              <td>{{ formatDateTime(order.timestamp) }}</td>
               <td>₱{{ order.totalPrice.toFixed(2) }}</td>
               <td>
                 <div class="status-cell">
@@ -169,7 +196,7 @@
       <div v-if="showOrderModal" class="modal-overlay" @click="closeModal">
         <div class="modal-content" @click.stop>
           <div class="modal-header">
-            <h2>Order #{{ selectedOrder.id }}</h2>
+            <h2>Order {{ selectedOrder.orderCode ? `#${selectedOrder.orderCode}` : '' }}</h2>
             <button class="close-btn" @click="closeModal">
               <i class="i-lucide-x"></i>
             </button>
@@ -189,7 +216,7 @@
               
               <div class="info-group">
                 <h3>Order Details</h3>
-                <p><strong>Date:</strong> {{ formatDate(selectedOrder.timestamp) }}</p>
+                <p><strong>Date:</strong> {{ formatDateTime(selectedOrder.timestamp) }}</p>
                 <p><strong>Status:</strong> 
                   <span :class="['status-badge', selectedOrder.status.toLowerCase()]">
                     {{ selectedOrder.status }}
@@ -249,6 +276,7 @@ import { ref, computed, onMounted } from 'vue';
 import Sidebar from '@/components/Sidebar.vue';
 import { db } from '@/firebase/firebaseConfig';
 import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
+import { getAuth } from 'firebase/auth';
 
 // UI State
 const isDarkMode = ref(false);
@@ -262,14 +290,25 @@ const showOrderModal = ref(false);
 const selectedOrder = ref({});
 const newStatus = ref('');
 const orders = ref([]);
+const selectedDate = ref('');
+const selectedTime = ref('');
+const currentSellerId = ref('');
 
 // Initialize with empty orders
 const initializeOrders = async () => {
   try {
+    const auth = getAuth();
+    currentSellerId.value = auth.currentUser?.uid;
+    
+    if (!currentSellerId.value) {
+      console.error('No seller ID found');
+      return;
+    }
+
     const querySnapshot = await getDocs(collection(db, 'orders'));
     orders.value = querySnapshot.docs.map(doc => {
       const data = doc.data();
-      let timestamp = data.timestamp;
+      let timestamp = data.createdAt || data.timestamp; // Prefer createdAt if it exists
       
       // Convert to Date if it's a Firestore Timestamp
       if (timestamp && typeof timestamp.toDate === 'function') {
@@ -291,9 +330,11 @@ const initializeOrders = async () => {
         status: data.status || 'Pending',
         Location: data.Location || '',
         totalPrice: data.totalPrice || 0,
-        timestamp: timestamp // Now guaranteed to be a Date object
+        timestamp: timestamp, // Now using createdAt if available
+        sellerId: data.sellerId || '',
+        orderCode: data.orderCode || ''
       };
-    });
+    }).filter(order => order.sellerId === currentSellerId.value);
   } catch (error) {
     console.error('Error fetching orders:', error);
   }
@@ -318,21 +359,68 @@ const processingOrdersCount = computed(() => orders.value.filter(order => order.
 const shippedOrdersCount = computed(() => orders.value.filter(order => order.status === 'Shipped').length);
 const deliveredOrdersCount = computed(() => orders.value.filter(order => order.status === 'Delivered').length);
 
-// Filter orders based on search query and active filter
+// Filter orders based on search query, active filter, and date
 const filteredOrders = computed(() => {
   const searchTerm = searchQuery.value.toLowerCase();
   return orders.value.filter(order => {
     const matchesSearch = 
-      order.id.toString().includes(searchQuery.value) ||
+      (order.orderCode && order.orderCode.toLowerCase().includes(searchTerm)) ||
       (order.username && order.username.toLowerCase().includes(searchTerm));
     
     const matchesFilter = 
       activeFilter.value === 'All Orders' || 
       order.status === activeFilter.value;
     
-    return matchesSearch && matchesFilter;
+    const matchesDate = filterByDateCondition(order.timestamp);
+    
+    return matchesSearch && matchesFilter && matchesDate;
   });
 });
+
+// Date filtering logic
+const filterByDateCondition = (orderDate) => {
+  if (!selectedDate.value) return true;
+  
+  const orderDateObj = new Date(orderDate);
+  const selectedDateObj = new Date(selectedDate.value);
+  
+  // Compare dates (ignoring time)
+  if (!isSameDate(orderDateObj, selectedDateObj)) {
+    return false;
+  }
+  
+  // If time is selected, compare hours and minutes
+  if (selectedTime.value) {
+    const [hours, minutes] = selectedTime.value.split(':').map(Number);
+    selectedDateObj.setHours(hours, minutes, 0, 0);
+    
+    // Compare hours and minutes
+    return (
+      orderDateObj.getHours() === hours &&
+      orderDateObj.getMinutes() === minutes
+    );
+  }
+  
+  return true;
+};
+
+const isSameDate = (date1, date2) => {
+  return (
+    date1.getFullYear() === date2.getFullYear() &&
+    date1.getMonth() === date2.getMonth() &&
+    date1.getDate() === date2.getDate()
+  );
+};
+
+const filterByDate = () => {
+  currentPage.value = 1;
+};
+
+const resetDateFilter = () => {
+  selectedDate.value = '';
+  selectedTime.value = '';
+  currentPage.value = 1;
+};
 
 // Calculate total pages for pagination
 const totalPages = computed(() => Math.max(1, Math.ceil(filteredOrders.value.length / itemsPerPage)));
@@ -372,51 +460,41 @@ const finishEditingStatus = async (index, order) => {
   }
 };
 
-// Format date for display
-// Updated formatDate function
-const formatDate = (timestamp) => {
+// Format date and time for display
+const formatDateTime = (timestamp) => {
   if (!timestamp) return 'N/A';
+  
+  let dateObj;
   
   // If it's already a Date object
   if (timestamp instanceof Date) {
-    return timestamp.toLocaleDateString('en-US', { 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric' 
-    });
+    dateObj = timestamp;
   }
-  
   // If it's a Firestore Timestamp
-  if (typeof timestamp.toDate === 'function') {
-    return timestamp.toDate().toLocaleDateString('en-US', { 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric' 
-    });
+  else if (typeof timestamp.toDate === 'function') {
+    dateObj = timestamp.toDate();
   }
-  
   // If it's a string that can be converted to a date
-  if (typeof timestamp === 'string') {
-    const date = new Date(timestamp);
-    if (!isNaN(date.getTime())) {
-      return date.toLocaleDateString('en-US', { 
-        year: 'numeric', 
-        month: 'long', 
-        day: 'numeric' 
-      });
-    }
+  else if (typeof timestamp === 'string') {
+    dateObj = new Date(timestamp);
+    if (isNaN(dateObj.getTime())) return 'N/A';
   }
-  
   // If it's a number (milliseconds since epoch)
-  if (typeof timestamp === 'number') {
-    return new Date(timestamp).toLocaleDateString('en-US', { 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric' 
-    });
+  else if (typeof timestamp === 'number') {
+    dateObj = new Date(timestamp);
+  }
+  else {
+    return 'N/A';
   }
   
-  return 'N/A';
+  return dateObj.toLocaleString('en-US', { 
+    year: 'numeric', 
+    month: 'short', 
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true
+  });
 };
 
 // Order detail modal functions
@@ -431,7 +509,7 @@ const closeModal = () => {
 };
 
 const editOrder = (order) => {
-  alert(`Edit order #${order.id}`);
+  alert(`Edit order ${order.orderCode ? `#${order.orderCode}` : ''}`);
 };
 
 const updateOrderStatus = async () => {
@@ -463,7 +541,6 @@ const createNewOrder = () => {
 </script>
 
 <style scoped>
-/* Keep all the existing styles from the original orders.vue */
 .dashboard-container {
   display: flex;
   min-height: 100vh;
@@ -582,45 +659,115 @@ const createNewOrder = () => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
+  margin-bottom: 24px;
   flex-wrap: wrap;
-  gap: 15px;
+  gap: 16px;
 }
 
-.search-container {
-  flex: 1;
-  max-width: 300px;
+.search-and-filter {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-grow: 1;
 }
 
 .search-box {
+  position: relative;
   display: flex;
   align-items: center;
-  background-color: #f3f4f6;
-  border-radius: 20px;
-  padding: 8px 16px;
-  width: 100%;
-}
-
-.search-icon {
-  color: #9ca3af;
-  margin-right: 8px;
+  flex-grow: 1;
+  max-width: 400px;
 }
 
 .search-box input {
-  border: none;
-  outline: none;
-  background-color: transparent;
   width: 100%;
-  font-size: 0.9rem;
+  padding: 10px 16px 10px 40px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  font-size: 14px;
+  transition: all 0.2s;
+  background-color: #f9f9f9;
+}
+
+.search-box input:focus {
+  outline: none;
+  border-color: #888;
+  background-color: white;
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.05);
+}
+
+.search-icon {
+  position: absolute;
+  left: 12px;
+  color: #888;
 }
 
 .clear-search {
+  position: absolute;
+  right: 12px;
   background: none;
   border: none;
-  color: #9ca3af;
+  color: #888;
   cursor: pointer;
   padding: 0;
-  margin-left: 8px;
+}
+
+/* Date Filter Styles */
+.date-filter-container {
+  display: flex;
+  align-items: center;
+}
+
+.date-filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background-color: #f9f9f9;
+  border-radius: 8px;
+  padding: 0 12px;
+  border: 1px solid #e0e0e0;
+  height: 40px;
+}
+
+.date-filter i {
+  color: #888;
+  font-size: 16px;
+}
+
+.minimal-date-input,
+.minimal-time-input {
+  border: none;
+  background: transparent;
+  padding: 8px 0;
+  font-size: 14px;
+  color: #333;
+  outline: none;
+  width: 120px;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.minimal-time-input {
+  width: 80px;
+}
+
+.minimal-reset-btn {
+  background: none;
+  border: none;
+  color: #888;
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.minimal-reset-btn:hover {
+  background-color: #f0f0f0;
 }
 
 .filter-actions {
@@ -1040,12 +1187,16 @@ const createNewOrder = () => {
 
 :global(.dark) .search-box,
 :global(.dark) .filter-btn,
-:global(.dark) .export-btn {
+:global(.dark) .export-btn,
+:global(.dark) .date-filter {
   background-color: #374151;
+  border-color: #4b5563;
   color: #e5e7eb;
 }
 
-:global(.dark) .search-box input {
+:global(.dark) .search-box input,
+:global(.dark) .minimal-date-input,
+:global(.dark) .minimal-time-input {
   color: #e5e7eb;
 }
 
@@ -1147,7 +1298,7 @@ const createNewOrder = () => {
 /* Responsive styles */
 @media (max-width: 768px) {
   .main-content {
-    margin-left: 0; /* On mobile, sidebar will be hidden or shown as overlay */
+    margin-left: 0;
     padding: 15px;
   }
   
@@ -1160,12 +1311,28 @@ const createNewOrder = () => {
     align-items: stretch;
   }
   
-  .search-container {
+  .search-and-filter {
+    flex-direction: column;
+    gap: 12px;
+  }
+  
+  .search-box {
     max-width: none;
+  }
+  
+  .date-filter {
+    width: 100%;
+    justify-content: space-between;
+  }
+  
+  .minimal-date-input,
+  .minimal-time-input {
+    width: 100%;
   }
   
   .filter-actions {
     justify-content: space-between;
+    width: 100%;
   }
   
   .order-info-section {

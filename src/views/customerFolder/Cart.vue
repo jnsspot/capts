@@ -87,7 +87,6 @@
   </div>
 </template>
 
-
 <script>
 import BottomNavigation from '@/components/BottomNavigation.vue';
 import { 
@@ -99,7 +98,8 @@ import {
 } from 'lucide-vue-next';
 import { ref, onMounted } from 'vue';
 import { db } from '@/firebase/firebaseConfig';
-import { collection, getDocs } from "firebase/firestore";
+import { collection, query, where, getDocs } from "firebase/firestore";
+import { getAuth } from "firebase/auth";
 
 export default {
   components: {
@@ -115,24 +115,33 @@ export default {
     const promoCode = ref('');
     const discount = ref(0);
     const deliveryFee = ref(50);
+    const auth = getAuth();
+    const currentUser = auth.currentUser;
 
-    // This is where you'll fetch real data from your carts collection
     const fetchCartItems = async () => {
       try {
-        // Implement your actual data fetching logic here
-        // For example, if using Firebase:
-        const querySnapshot = await getDocs(collection(db, "carts"));
-        cartItems.value = querySnapshot.docs.map(doc => ({
-         productId: doc.id,
-           ...doc.data()
-       }));
-        
-        // For other backends, implement your specific API call here
+        if (currentUser) {
+          const userId = currentUser.uid;
+          const q = query(
+            collection(db, "carts"), 
+            where("userId", "==", userId)
+          );
+          
+          const querySnapshot = await getDocs(q);
+          cartItems.value = querySnapshot.docs.map(doc => ({
+            productId: doc.id,
+            ...doc.data()
+          }));
+        } else {
+          console.log("No user is logged in");
+          // You might want to redirect to login page here
+        }
       } catch (error) {
         console.error("Error fetching cart items:", error);
       }
     };
 
+    // Rest of the methods remain the same
     const goBack = () => {
       window.history.back();
     };

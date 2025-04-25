@@ -310,7 +310,7 @@
         <p>Your order has been confirmed and will be processed shortly.</p>
         
         <div class="order-number">
-          <p class="label">Order Number</p>
+          <p class="label">Order Code</p>
           <p class="value">#{{ orderNumber }}</p>
         </div>
         
@@ -376,7 +376,6 @@ export default {
         totalPrice: 0,
         sellerId: '',
         pricePerKg: 0 
-
       })
     }
   },
@@ -406,7 +405,7 @@ export default {
     let notificationTimeout = null;
     
     // Order number for success modal
-    const orderNumber = ref('ORD' + Math.floor(Math.random() * 1000000));
+    const orderNumber = ref('');
     
     // Address data
     const addresses = ref([]);
@@ -432,6 +431,14 @@ export default {
     // Order success
     const showSuccessModal = ref(false);
     
+    // Helper function to generate order code
+    const generateOrderCode = () => {
+      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+      const randomLetter = chars.charAt(Math.floor(Math.random() * chars.length));
+      const randomNumber = Math.floor(100000 + Math.random() * 900000);
+      return `${randomLetter}${randomNumber}`;
+    };
+
     // Quantity control methods
     const increaseQuantity = () => {
       order.value.weight += 0.5;
@@ -463,14 +470,12 @@ export default {
           if (userDoc.data().addresses) {
             addresses.value = userDoc.data().addresses;
           } else {
-            // Initialize addresses array if it doesn't exist
             await updateDoc(userDocRef, {
               addresses: []
             });
             addresses.value = [];
           }
         } else {
-          // Create user document if it doesn't exist
           await setDoc(userDocRef, {
             addresses: []
           });
@@ -498,7 +503,6 @@ export default {
         
         const userDocRef = doc(db, 'users', auth.currentUser.uid);
         
-        // Add the new address to the user's addresses array
         await updateDoc(userDocRef, {
           addresses: arrayUnion({
             name: newAddress.value.name,
@@ -507,15 +511,12 @@ export default {
           })
         });
         
-        // Refresh the addresses list
         await fetchUserAddresses();
         
-        // Select the newly added address
         if (addresses.value.length > 0) {
           selectedAddressIndex.value = addresses.value.length - 1;
         }
         
-        // Reset form
         newAddress.value = {
           name: '',
           address: '',
@@ -576,98 +577,112 @@ export default {
 
     // Place order function
     const placeOrder = async () => {
-        if (!selectedAddress.value) {
-          showNotificationMessage('Please select a delivery address', 'error');
-          return;
+      if (!selectedAddress.value) {
+        showNotificationMessage('Please select a delivery address', 'error');
+        return;
+      }
+      
+      if (paymentMethod.value === 'gcash' && !gcashDetails.value.number) {
+        showNotificationMessage('Please enter your GCash number', 'error');
+        return;
+      }
+      
+      try {
+        if (!auth.currentUser) {
+          throw new Error('User not authenticated');
         }
-        
-        if (paymentMethod.value === 'gcash' && !gcashDetails.value.number) {
-          showNotificationMessage('Please enter your GCash number', 'error');
-          return;
-        }
-        
-        try {
-          if (!auth.currentUser) {
-            throw new Error('User not authenticated');
-          }
 
-          // Get references to all needed documents
+        // Generate order code
+        const orderCode = generateOrderCode();
+        orderNumber.value = orderCode;
+
+        // Get product data
+        const productDoc = await getDoc(doc(db, 'products', order.value.productId));
+        if (!productDoc.exists()) {
+          throw new Error('Product not found');
+        }
+        const productData = productDoc.data();
+
+        // Process the order transaction
+        await runTransaction(db, async (transaction) => {
           const productRef = doc(db, 'products', order.value.productId);
-          const userRef = doc(db, 'users', auth.currentUser.uid);
+          const currentStock = productData.stock;
+          const orderedWeight = order.value.weight;
           
-          await runTransaction(db, async (transaction) => {
-            // Get current product data
-            const productDoc = await transaction.get(productRef);
-            if (!productDoc.exists()) {
-              throw new Error('Product not found');
-            }
-            
-            // Get user data
-            const userDoc = await transaction.get(userRef);
-            if (!userDoc.exists()) {
-              throw new Error('User not found');
-            }
-            
-            const userData = userDoc.data();
-            const currentStock = productDoc.data().stock;
-            const orderedWeight = order.value.weight;
-            
-            if (currentStock < orderedWeight) {
-              throw new Error(`Only ${currentStock}kg available. Please adjust your order.`);
-            }
-            
-            // Calculate new stock
-            const newStock = currentStock - orderedWeight;
-            
-            // Prepare order data with proper user information
-            const orderData = {
-              orderId: orderNumber.value,
-              sellerId: order.value.sellerId,
-              productId: order.value.productId,
-              productName: order.value.productName,
-              productImage: order.value.productImage,
-              price: order.value.pricePerKg,
-              totalPrice: total.value,
-              weight: order.value.weight,
-              packagingType: order.value.packagingType,
-              paymentMethod: paymentMethod.value,
-              Location: {
-                address: selectedAddress.value.address,
-                notes: selectedAddress.value.locationNotes || ''
-              },
-              status: 'Processing',
-              createdAt: serverTimestamp(),
-              userId: auth.currentUser.uid,  // Changed from customerId to userId
-              username: userData.username || '',  // Make sure this field exists in your users collection
-              userEmail: userData.email || ''    // Optional: include email if needed
-            };
-            
-            // Update product stock
-            transaction.update(productRef, { stock: newStock });
-            
-            // Create new order
-            const orderRef = doc(collection(db, 'orders'));
-            transaction.set(orderRef, orderData);
+          if (currentStock < orderedWeight) {
+            throw new Error(`Only ${currentStock}kg available. Please adjust your order.`);
+          }
+          
+          // Update product stock
+          transaction.update(productRef, { 
+            stock: currentStock - orderedWeight 
           });
           
-          // Show success
-          showSuccessModal.value = true;
-          showNotificationMessage('Order placed successfully!', 'success');
-          
-        } catch (error) {
-          console.error('Order placement error:', error);
-          showNotificationMessage(
-            error.message || 'Failed to place order. Please try again.',
-            'error'
-          );
-        }
-      };
+          // Create order document
+          const orderRef = doc(collection(db, 'orders'));
+          transaction.set(orderRef, {
+            orderCode: orderCode,
+            sellerId: order.value.sellerId,
+            productId: order.value.productId,
+            productName: order.value.productName,
+            productImage: order.value.productImage,
+            price: order.value.pricePerKg,
+            totalPrice: total.value,
+            weight: order.value.weight,
+            packagingType: order.value.packagingType,
+            paymentMethod: paymentMethod.value,
+            Location: {
+              address: selectedAddress.value.address,
+              notes: selectedAddress.value.locationNotes || ''
+            },
+            status: 'Processing',
+            createdAt: serverTimestamp(),
+            userId: auth.currentUser.uid,
+            username: (await getDoc(doc(db, 'users', auth.currentUser.uid))).data().username || '',
+          });
+        });
+
+        // Save to sales collection
+        const saleData = {
+          productId: order.value.productId,
+          productName: order.value.productName,
+          category: productData.category || 'uncategorized',
+          quantity: order.value.weight,
+          price: order.value.pricePerKg,
+          totalPrice: order.value.pricePerKg * order.value.weight,
+          timestamp: serverTimestamp(),
+          sellerId: order.value.sellerId,
+          season: getCurrentSeason(),
+          orderCode: orderCode
+        };
+
+        const saleRef = await addDoc(collection(db, 'sales'), saleData);
+        
+        // Show success
+        showSuccessModal.value = true;
+        showNotificationMessage('Order placed successfully!', 'success');
+        
+      } catch (error) {
+        console.error('Order placement error:', error);
+        showNotificationMessage(
+          error.message || 'Failed to place order. Please try again.',
+          'error'
+        );
+      }
+    };
+
+    function getCurrentSeason() {
+      const month = new Date().getMonth() + 1;
+      if (month >= 3 && month <= 5) return 'spring';
+      if (month >= 6 && month <= 8) return 'summer';
+      if (month >= 9 && month <= 11) return 'fall';
+      return 'winter';
+    }
         
     const continueShopping = () => {
-    showSuccessModal.value = false;
-    // Use whichever navigation method works for your app
-    router.push('/'); // This is the safest option
-  };
+      showSuccessModal.value = false;
+      router.push('/');
+    };
 
     // Load addresses when component mounts
     onMounted(() => {
@@ -724,6 +739,7 @@ export default {
   }
 }
 </script>
+
 
 <style scoped>
 /* Base styles */

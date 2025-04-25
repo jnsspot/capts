@@ -75,7 +75,7 @@ const isCollapsed = ref(false);
 const menuItems = [
   { name: 'Dashboard', path: '/seller-dashboard', icon: LayoutDashboard },
   { name: 'Farm Products', path: '/products', icon: Sprout },
-  { name: 'Forecasting', path: '/forecasting', icon: TrendingUp },
+  { name: 'Forecasting', path: '/seller/forecasting', icon: TrendingUp },
   { name: 'Harvest Calendar', path: '/calendar', icon: Calendar },
   { name: 'Customers', path: '/customers', icon: Users },
   { name: 'Analytics', path: '/seller/analytics', icon: BarChart },

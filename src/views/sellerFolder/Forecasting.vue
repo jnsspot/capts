@@ -1,402 +1,434 @@
 <template>
-  <div class="app-container" :class="{ 'dark': isDarkMode }">
-    <!-- Sidebar -->
-    <Sidebar :initial-active-item="'Market'" />
+  <div class="dashboard-container">
+    <Sidebar initialActiveItem="Forecasting" />
     
-    <!-- Main Content - adjusted to work with the fixed sidebar -->
     <div class="main-content">
-      <div class="top-bar">
-        <h1>Market Overview</h1>
-        <button class="theme-toggle" @click="toggleDarkMode">
-          <i :class="isDarkMode ? 'i-lucide-sun' : 'i-lucide-moon'"></i>
-        </button>
+      <header class="header">
+        <div class="page-title">
+          <h1>Sales Forecasting</h1>
+          <p>Predict future demand for your products</p>
+        </div>
+        
+        <div class="forecast-controls">
+          <select v-model="forecastPeriod" class="period-select">
+            <option value="7">Next 7 Days</option>
+            <option value="14">Next 14 Days</option>
+            <option value="30">Next 30 Days</option>
+          </select>
+          <select v-model="selectedCategory" class="category-select">
+            <option value="all">All Categories</option>
+            <option v-for="category in availableCategories" :key="category" :value="category">
+              {{ category }}
+            </option>
+          </select>
+          <button @click="generateForecast" class="generate-btn">
+            Generate Forecast
+          </button>
+        </div>
+      </header>
+      
+      <div v-if="loading" class="loading-state">
+        <div class="spinner"></div>
+        <p>Generating forecast...</p>
       </div>
-
-      <div class="market-overview-page">
-        <!-- Market Summary -->
-        <div class="section">
-          <h2>Current Market Trends</h2>
-          <p class="helper-text">See which crops are trending in the market this season</p>
-          
-          <div class="market-summary-cards">
-            <div class="market-card">
-              <div class="market-card-header">
-                <h3>Top Rising Crops</h3>
-                <span class="trend-badge up">
-                  <i class="i-lucide-trending-up"></i>
-                </span>
+      
+      <div v-else-if="error" class="error-state">
+        <div class="error-icon">!</div>
+        <p>{{ error }}</p>
+        <button @click="generateForecast" class="retry-btn">Try Again</button>
+      </div>
+      
+      <div v-else-if="forecastData" class="forecast-results">
+        <div class="forecast-chart-container">
+          <h2>Sales Forecast for {{ forecastTitle }}</h2>
+          <div class="chart-wrapper">
+            <canvas ref="forecastChart"></canvas>
+          </div>
+        </div>
+        
+        <div class="forecast-recommendations">
+          <h2>Recommended Products</h2>
+          <div class="recommendation-cards">
+            <div v-for="(product, index) in recommendedProducts" :key="index" class="recommendation-card">
+              <div class="rank-badge">{{ index + 1 }}</div>
+              <div class="product-info">
+                <h3>{{ product.name }}</h3>
+                <p class="category">{{ product.category }}</p>
               </div>
-              <div class="market-card-content">
-                <div v-for="(crop, index) in topRisingCrops" :key="index" class="trend-item">
-                  <div class="trend-info">
-                    <span class="crop-name">{{ crop.name }}</span>
-                    <span class="crop-category">{{ crop.category }}</span>
-                  </div>
-                  <div class="trend-value up">+{{ crop.change }}%</div>
+              <div class="forecast-stats">
+                <div class="stat">
+                  <span class="stat-label">Projected Demand</span>
+                  <span class="stat-value">{{ product.demand }} units</span>
                 </div>
-              </div>
-            </div>
-            
-            <div class="market-card">
-              <div class="market-card-header">
-                <h3>Top Falling Crops</h3>
-                <span class="trend-badge down">
-                  <i class="i-lucide-trending-down"></i>
-                </span>
-              </div>
-              <div class="market-card-content">
-                <div v-for="(crop, index) in topFallingCrops" :key="index" class="trend-item">
-                  <div class="trend-info">
-                    <span class="crop-name">{{ crop.name }}</span>
-                    <span class="crop-category">{{ crop.category }}</span>
-                  </div>
-                  <div class="trend-value down">{{ crop.change }}%</div>
-                </div>
-              </div>
-            </div>
-            
-            <div class="market-card">
-              <div class="market-card-header">
-                <h3>Most Stable Crops</h3>
-                <span class="trend-badge stable">
-                  <i class="i-lucide-minus"></i>
-                </span>
-              </div>
-              <div class="market-card-content">
-                <div v-for="(crop, index) in stableCrops" :key="index" class="trend-item">
-                  <div class="trend-info">
-                    <span class="crop-name">{{ crop.name }}</span>
-                    <span class="crop-category">{{ crop.category }}</span>
-                  </div>
-                  <div class="trend-value stable">{{ crop.change }}%</div>
+                <div class="stat">
+                  <span class="stat-label">Confidence</span>
+                  <span class="stat-value">{{ product.confidence }}%</span>
                 </div>
               </div>
             </div>
           </div>
         </div>
-        
-        <!-- Seasonal Forecast -->
-        <div class="section">
-          <h2>Seasonal Market Forecast</h2>
-          <p class="helper-text">Projected market trends for the next 6 months</p>
-          
-          <div class="chart-container">
-            <canvas ref="seasonalChart"></canvas>
-          </div>
-          
-          <div class="season-legend">
-            <div class="season-item">
-              <div class="season-color spring"></div>
-              <span>Spring</span>
-            </div>
-            <div class="season-item">
-              <div class="season-color summer"></div>
-              <span>Summer</span>
-            </div>
-            <div class="season-item">
-              <div class="season-color fall"></div>
-              <span>Fall</span>
-            </div>
-            <div class="season-item">
-              <div class="season-color winter"></div>
-              <span>Winter</span>
-            </div>
-          </div>
+      </div>
+      
+      <div v-else class="empty-state">
+        <div class="empty-icon">
+          <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#2e5c31" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+          </svg>
         </div>
-        
-        <!-- Market Insights -->
-        <div class="section">
-          <h2>Market Insights</h2>
-          <p class="helper-text">Key information to help you plan your farming strategy</p>
-          
-          <div class="insights-grid">
-            <div class="insight-card">
-              <div class="insight-icon">
-                <i class="i-lucide-calendar"></i>
-              </div>
-              <div class="insight-content">
-                <h3>Best Planting Time</h3>
-                <p>For most vegetables, early April will provide optimal growing conditions based on weather forecasts.</p>
-              </div>
-            </div>
-            
-            <div class="insight-card">
-              <div class="insight-icon">
-                <i class="i-lucide-droplets"></i>
-              </div>
-              <div class="insight-content">
-                <h3>Water Resources</h3>
-                <p>Water reserves are 15% higher than last year. Irrigation costs are expected to decrease.</p>
-              </div>
-            </div>
-            
-            <div class="insight-card">
-              <div class="insight-icon">
-                <i class="i-lucide-users"></i>
-              </div>
-              <div class="insight-content">
-                <h3>Consumer Preferences</h3>
-                <p>Organic produce demand is up 23% from last year. Consider transitioning more crops to organic.</p>
-              </div>
-            </div>
-            
-            <div class="insight-card">
-              <div class="insight-icon">
-                <i class="i-lucide-truck"></i>
-              </div>
-              <div class="insight-content">
-                <h3>Distribution Channels</h3>
-                <p>Local farmers markets are showing 18% growth. Direct-to-consumer sales are becoming more profitable.</p>
-              </div>
-            </div>
-          </div>
-        </div>
-        
-        <!-- Crop Spotlight -->
-        <div class="section">
-          <h2>Crop Spotlight</h2>
-          <p class="helper-text">This month's featured crops with high market potential</p>
-          
-          <div class="spotlight-grid">
-            <div v-for="(crop, index) in spotlightCrops" :key="index" class="spotlight-card">
-              <div class="spotlight-image">
-                <img :src="crop.image" :alt="crop.name" />
-              </div>
-              <div class="spotlight-content">
-                <h3>{{ crop.name }}</h3>
-                <div class="spotlight-stats">
-                  <div class="stat-item">
-                    <span class="stat-label">Demand</span>
-                    <div class="stat-bar">
-                      <div class="stat-fill" :style="{ width: crop.demand + '%' }"></div>
-                    </div>
-                  </div>
-                  <div class="stat-item">
-                    <span class="stat-label">Profitability</span>
-                    <div class="stat-bar">
-                      <div class="stat-fill" :style="{ width: crop.profitability + '%' }"></div>
-                    </div>
-                  </div>
-                  <div class="stat-item">
-                    <span class="stat-label">Ease of Growing</span>
-                    <div class="stat-bar">
-                      <div class="stat-fill" :style="{ width: crop.easeOfGrowing + '%' }"></div>
-                    </div>
-                  </div>
-                </div>
-                <p class="spotlight-description">{{ crop.description }}</p>
-              </div>
-            </div>
-          </div>
-        </div>
-        
-        <!-- Your Crop Forecasting -->
-        <div class="section">
-          <h2>Your Personalized Crop Forecast</h2>
-          <p class="helper-text">Get detailed predictions for your specific crops</p>
-          
-          <div class="forecast-cta">
-            <p>Want to see how your specific crops will perform in the coming months?</p>
-            <router-link to="/seller/crop-forecast" class="primary-btn">
-              <i class="i-lucide-chart-line mr-2"></i> Forecast My Crops
-            </router-link>
-          </div>
-        </div>
+        <h2>No Forecast Generated</h2>
+        <p>Select a time period and click "Generate Forecast" to predict future sales</p>
+        <button @click="generateForecast" class="generate-btn">Generate Forecast</button>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted, computed, watch } from 'vue';
+import { collection, query, orderBy, getDocs } from 'firebase/firestore';
+import { db } from '@/firebase/firebaseConfig';
+import * as tf from '@tensorflow/tfjs';
 import Chart from 'chart.js/auto';
 import Sidebar from '@/components/Sidebar.vue';
-import { useRouter } from 'vue-router';
 
-const router = useRouter();
+// Data properties
+const forecastPeriod = ref('14');
+const selectedCategory = ref('all');
+const availableCategories = ref([]);
+const loading = ref(false);
+const error = ref(null);
+const forecastData = ref(null);
+const recommendedProducts = ref([]);
+const forecastChart = ref(null);
+let chartInstance = null;
 
-// UI State
-const isDarkMode = ref(false);
-const activeMenu = ref('market');
-const seasonalChart = ref(null);
-const chartInstance = ref(null);
+// Computed properties
+const forecastTitle = computed(() => {
+  if (selectedCategory.value === 'all') {
+    return `All Products (Next ${forecastPeriod.value} Days)`;
+  }
+  return `${selectedCategory.value} (Next ${forecastPeriod.value} Days)`;
+});
 
-// Toggle functions
-const toggleDarkMode = () => {
-  isDarkMode.value = !isDarkMode.value;
-  document.body.classList.toggle('dark', isDarkMode.value);
-  if (chartInstance.value) {
-    chartInstance.value.destroy();
-    renderSeasonalChart();
+// Fetch sales data from Firestore
+const fetchSalesData = async () => {
+  try {
+    const salesCollection = collection(db, 'sales');
+    const q = query(salesCollection, orderBy('timestamp', 'asc'));
+    const querySnapshot = await getDocs(q);
+    
+    const sales = [];
+    const categories = new Set();
+    
+    querySnapshot.forEach((doc) => {
+      const saleData = doc.data();
+      sales.push({
+        id: doc.id,
+        ...saleData,
+        timestamp: saleData.timestamp.toDate()
+      });
+      
+      if (saleData.category) {
+        categories.add(saleData.category);
+      }
+    });
+    
+    availableCategories.value = Array.from(categories).sort();
+    return sales;
+  } catch (err) {
+    console.error("Error fetching sales data:", err);
+    error.value = "Failed to load sales data. Please try again.";
+    return [];
   }
 };
 
-// Navigation function (alternative to router-link)
-const navigateToCropForecasting = () => {
-  router.push('/seller/crop-forecast');
+// Prepare time series data for TensorFlow
+const prepareTimeSeriesData = (sales) => {
+  // Group sales by date and category
+  const dailySales = {};
+  
+  sales.forEach(sale => {
+    const date = new Date(sale.timestamp);
+    const dateKey = date.toISOString().split('T')[0]; // YYYY-MM-DD
+    
+    if (!dailySales[dateKey]) {
+      dailySales[dateKey] = {
+        date: date,
+        categories: {}
+      };
+    }
+    
+    if (!dailySales[dateKey].categories[sale.category]) {
+      dailySales[dateKey].categories[sale.category] = 0;
+    }
+    
+    dailySales[dateKey].categories[sale.category] += sale.quantity || 1;
+  });
+  
+  // Get sorted dates and all categories
+  const dates = Object.keys(dailySales).sort();
+  const allCategories = availableCategories.value;
+  
+  // Create time series arrays
+  const timeSeries = {};
+  allCategories.forEach(cat => {
+    timeSeries[cat] = dates.map(date => dailySales[date].categories[cat] || 0);
+  });
+  
+  return {
+    dates: dates.map(date => new Date(date)),
+    timeSeries,
+    categories: allCategories
+  };
 };
 
-// Sample data for market trends
-const topRisingCrops = ref([
-  { name: 'Kale', category: 'Leafy Greens', change: 28 },
-  { name: 'Cherry Tomatoes', category: 'Vegetables', change: 23 },
-  { name: 'Microgreens', category: 'Specialty', change: 19 },
-  { name: 'Blueberries', category: 'Berries', change: 17 },
-  { name: 'Sweet Potatoes', category: 'Root Vegetables', change: 15 }
-]);
+// Create TensorFlow model
+const createModel = (inputShape) => {
+  const model = tf.sequential();
+  
+  model.add(tf.layers.lstm({
+    units: 50,
+    inputShape: inputShape,
+    returnSequences: false
+  }));
+  
+  model.add(tf.layers.dense({
+    units: 25,
+    activation: 'relu'
+  }));
+  
+  model.add(tf.layers.dense({
+    units: inputShape[1], // Predict all categories
+    activation: 'linear'
+  }));
+  
+  model.compile({
+    optimizer: tf.train.adam(0.01),
+    loss: 'meanSquaredError'
+  });
+  
+  return model;
+};
 
-const topFallingCrops = ref([
-  { name: 'Iceberg Lettuce', category: 'Leafy Greens', change: -12 },
-  { name: 'White Potatoes', category: 'Root Vegetables', change: -9 },
-  { name: 'Green Beans', category: 'Vegetables', change: -7 },
-  { name: 'Radishes', category: 'Root Vegetables', change: -6 },
-  { name: 'Turnips', category: 'Root Vegetables', change: -5 }
-]);
-
-const stableCrops = ref([
-  { name: 'Carrots', category: 'Root Vegetables', change: 2 },
-  { name: 'Onions', category: 'Alliums', change: 1 },
-  { name: 'Apples', category: 'Fruits', change: 0 },
-  { name: 'Cabbage', category: 'Brassicas', change: -1 },
-  { name: 'Garlic', category: 'Alliums', change: -2 }
-]);
-
-// Sample data for spotlight crops
-const spotlightCrops = ref([
-  {
-    name: 'Purple Sweet Potatoes',
-    image: '/placeholder.svg?height=150&width=150',
-    demand: 85,
-    profitability: 78,
-    easeOfGrowing: 65,
-    description: 'Vibrant color and rich in antioxidants. Growing consumer interest in unique varieties makes this a profitable specialty crop.'
-  },
-  {
-    name: 'Heirloom Tomatoes',
-    image: '/placeholder.svg?height=150&width=150',
-    demand: 92,
-    profitability: 80,
-    easeOfGrowing: 55,
-    description: 'Premium prices at farmers markets. Diverse colors and flavors appeal to chefs and home cooks seeking authentic taste.'
-  },
-  {
-    name: 'Ginger',
-    image: '/placeholder.svg?height=150&width=150',
-    demand: 75,
-    profitability: 88,
-    easeOfGrowing: 60,
-    description: 'Growing demand for locally-grown ginger. Can be grown in containers and harvested young for specialty markets.'
+// Generate forecast
+const generateForecast = async () => {
+  loading.value = true;
+  error.value = null;
+  forecastData.value = null;
+  recommendedProducts.value = [];
+  
+  try {
+    // 1. Fetch sales data
+    const sales = await fetchSalesData();
+    
+    if (sales.length === 0) {
+      error.value = "No sales data available for forecasting";
+      return;
+    }
+    
+    // 2. Prepare time series data
+    const { dates, timeSeries, categories } = prepareTimeSeriesData(sales);
+    
+    if (categories.length === 0) {
+      error.value = "No product categories found in sales data";
+      return;
+    }
+    
+    // 3. Normalize data (0-1 range)
+    const maxValues = {};
+    const normalizedSeries = {};
+    
+    categories.forEach(cat => {
+      maxValues[cat] = Math.max(...timeSeries[cat], 1); // Ensure at least 1 to avoid division by zero
+      normalizedSeries[cat] = timeSeries[cat].map(val => val / maxValues[cat]);
+    });
+    
+    // 4. Prepare training data
+    const lookBack = 7; // Use 7 days to predict next day
+    const xs = [];
+    const ys = [];
+    
+    for (let i = lookBack; i < dates.length; i++) {
+      const x = [];
+      for (let j = i - lookBack; j < i; j++) {
+        const point = categories.map(cat => normalizedSeries[cat][j]);
+        x.push(point);
+      }
+      xs.push(x);
+      
+      const y = categories.map(cat => normalizedSeries[cat][i]);
+      ys.push(y);
+    }
+    
+    if (xs.length === 0) {
+      error.value = "Not enough data points for forecasting (need at least 8 days of data)";
+      return;
+    }
+    
+    // 5. Convert to tensors
+    const xTensor = tf.tensor3d(xs, [xs.length, lookBack, categories.length]);
+    const yTensor = tf.tensor2d(ys, [ys.length, categories.length]);
+    
+    // 6. Create and train model
+    const model = createModel([lookBack, categories.length]);
+    await model.fit(xTensor, yTensor, {
+      epochs: 100,
+      batchSize: 32,
+      validationSplit: 0.2,
+      verbose: 0
+    });
+    
+    // 7. Generate forecast
+    const forecastDays = parseInt(forecastPeriod.value);
+    const forecast = [];
+    let lastInput = xs[xs.length - 1]; // Start with last known week
+    
+    for (let i = 0; i < forecastDays; i++) {
+      const inputTensor = tf.tensor3d([lastInput], [1, lookBack, categories.length]);
+      const prediction = model.predict(inputTensor);
+      const predictedValues = prediction.arraySync()[0];
+      
+      // Denormalize
+      const denormalized = categories.map((cat, idx) => ({
+        category: cat,
+        value: Math.round(predictedValues[idx] * maxValues[cat]),
+        confidence: Math.min(95, Math.round(predictedValues[idx] * 100)) // Simple confidence metric
+      }));
+      
+      forecast.push({
+        date: new Date(dates[dates.length - 1].getTime() + (i + 1) * 24 * 60 * 60 * 1000),
+        values: denormalized
+      });
+      
+      // Update lastInput for next prediction
+      lastInput.shift();
+      lastInput.push(predictedValues);
+    }
+    
+    // 8. Process results
+    forecastData.value = {
+      dates: forecast.map(f => f.date),
+      categories,
+      values: forecast.map(f => f.values)
+    };
+    
+    // 9. Generate recommendations
+    generateRecommendations();
+    
+    // 10. Render chart
+    renderChart();
+    
+  } catch (err) {
+    console.error("Error generating forecast:", err);
+    error.value = "An error occurred during forecasting. Please try again.";
+  } finally {
+    loading.value = false;
   }
-]);
+};
 
-// Render seasonal chart
-const renderSeasonalChart = () => {
-  if (!seasonalChart.value) return;
+// Generate product recommendations
+const generateRecommendations = () => {
+  if (!forecastData.value) return;
   
-  if (chartInstance.value) {
-    chartInstance.value.destroy();
+  const { categories, values } = forecastData.value;
+  const productDemand = {};
+  
+  // Initialize demand for each category
+  categories.forEach(cat => {
+    productDemand[cat] = {
+      total: 0,
+      confidenceSum: 0,
+      count: 0
+    };
+  });
+  
+  // Calculate total demand and average confidence
+  values.forEach(dailyValues => {
+    dailyValues.forEach(item => {
+      productDemand[item.category].total += item.value;
+      productDemand[item.category].confidenceSum += item.confidence;
+      productDemand[item.category].count++;
+    });
+  });
+  
+  // Create recommendations array
+  recommendedProducts.value = categories.map(cat => ({
+    name: `Top ${cat}`,
+    category: cat,
+    demand: productDemand[cat].total,
+    confidence: Math.round(productDemand[cat].confidenceSum / productDemand[cat].count)
+  })).sort((a, b) => b.demand - a.demand)
+    .slice(0, 5); // Top 5 recommended products
+};
+
+// Render forecast chart
+const renderChart = () => {
+  if (!forecastChart.value || !forecastData.value) return;
+  
+  const ctx = forecastChart.value.getContext('2d');
+  
+  // Destroy previous chart instance if exists
+  if (chartInstance) {
+    chartInstance.destroy();
   }
   
-  const ctx = seasonalChart.value.getContext('2d');
+  const { dates, values } = forecastData.value;
   
-  // Sample data for seasonal forecast
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  const currentMonth = new Date().getMonth();
-  const labels = [];
+  // Filter data if specific category is selected
+  const displayData = selectedCategory.value === 'all' 
+    ? forecastData.value.categories.map((cat, idx) => ({
+        label: cat,
+        data: values.map(daily => daily.find(item => item.category === cat)?.value || 0),
+        borderColor: getCategoryColor(idx),
+        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+        tension: 0.3
+      }))
+    : [{
+        label: selectedCategory.value,
+        data: values.map(daily => daily.find(item => item.category === selectedCategory.value)?.value || 0),
+        borderColor: '#2e5c31',
+        backgroundColor: 'rgba(46, 92, 49, 0.1)',
+        tension: 0.3,
+        fill: true
+      }];
   
-  // Get next 6 months
-  for (let i = 0; i < 6; i++) {
-    const monthIndex = (currentMonth + i) % 12;
-    labels.push(months[monthIndex]);
-  }
-  
-  // Set chart colors based on dark mode
-  const textColor = isDarkMode.value ? '#e0e0e0' : '#333';
-  const gridColor = isDarkMode.value ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)';
-  
-  chartInstance.value = new Chart(ctx, {
+  chartInstance = new Chart(ctx, {
     type: 'line',
     data: {
-      labels: labels,
-      datasets: [
-        {
-          label: 'Vegetables',
-          data: [65, 72, 78, 82, 75, 68],
-          borderColor: '#4caf50',
-          backgroundColor: 'rgba(76, 175, 80, 0.1)',
-          tension: 0.3
-        },
-        {
-          label: 'Fruits',
-          data: [45, 55, 70, 85, 80, 70],
-          borderColor: '#ff9800',
-          backgroundColor: 'rgba(255, 152, 0, 0.1)',
-          tension: 0.3
-        },
-        {
-          label: 'Herbs',
-          data: [50, 60, 65, 60, 55, 50],
-          borderColor: '#9c27b0',
-          backgroundColor: 'rgba(156, 39, 176, 0.1)',
-          tension: 0.3
-        },
-        {
-          label: 'Root Crops',
-          data: [70, 65, 60, 55, 60, 70],
-          borderColor: '#795548',
-          backgroundColor: 'rgba(121, 85, 72, 0.1)',
-          tension: 0.3
-        }
-      ]
+      labels: dates.map(d => d.toLocaleDateString()),
+      datasets: displayData
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
-        legend: {
-          position: 'top',
-          labels: {
-            color: textColor,
-            font: {
-              size: 12
-            }
-          }
+        title: {
+          display: true,
+          text: forecastTitle.value
         },
         tooltip: {
+          mode: 'index',
+          intersect: false,
           callbacks: {
             label: function(context) {
-              return `${context.dataset.label}: ${context.parsed.y}% market strength`;
+              return `${context.dataset.label}: ${context.raw} units`;
             }
           }
         }
       },
       scales: {
-        x: {
-          grid: {
-            display: false,
-            color: gridColor
-          },
-          ticks: {
-            color: textColor,
-            font: {
-              size: 12
-            }
-          }
-        },
         y: {
           beginAtZero: true,
-          max: 100,
-          grid: {
-            color: gridColor
-          },
-          ticks: {
-            color: textColor,
-            font: {
-              size: 12
-            },
-            callback: function(value) {
-              return value + '%';
-            }
+          title: {
+            display: true,
+            text: 'Units'
+          }
+        },
+        x: {
+          title: {
+            display: true,
+            text: 'Date'
           }
         }
       }
@@ -404,504 +436,321 @@ const renderSeasonalChart = () => {
   });
 };
 
-onMounted(() => {
-  // Check for dark mode
-  isDarkMode.value = document.body.classList.contains('dark');
-  
-  // Render chart
-  renderSeasonalChart();
+// Helper function for category colors
+const getCategoryColor = (index) => {
+  const colors = ['#2e5c31', '#4a8f4d', '#6ab76e', '#8fd991', '#b3e6b5'];
+  return colors[index % colors.length];
+};
+
+// Watch for changes in category selection
+watch(selectedCategory, (newValue, oldValue) => {
+  if (forecastData.value) {
+    renderChart();
+  }
+});
+
+// Initialize component
+onMounted(async () => {
+  // Load available categories
+  const sales = await fetchSalesData();
+  if (sales.length > 0) {
+    const categories = new Set();
+    sales.forEach(sale => {
+      if (sale.category) categories.add(sale.category);
+    });
+    availableCategories.value = Array.from(categories).sort();
+  }
 });
 </script>
-
 <style scoped>
-/* Layout - Adjusted to work with fixed sidebar */
-.app-container {
-  min-height: 100vh;
-  background: #f9f9f9;
-  color: #333;
+.dashboard-container {
   display: flex;
-}
-
-.app-container.dark {
-  background: #1a1a1a;
-  color: #e0e0e0;
+  min-height: 100vh;
+  background-color: #f9fafb;
 }
 
 .main-content {
-  margin-left: 230px; /* Match the sidebar width */
-  min-height: 100vh;
   flex: 1;
-  transition: all 0.3s ease;
+  padding: 24px;
+  margin-left: 230px;
 }
 
-.top-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 1rem 2rem;
-  background: #2e5c31;
-  color: white;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-}
-
-.dark .top-bar {
-  background: #1a3a1c;
-}
-
-.top-bar h1 {
-  margin: 0;
-  font-size: 1.5rem;
-}
-
-.theme-toggle {
-  background: none;
-  border: none;
-  color: white;
-  font-size: 1.25rem;
-  cursor: pointer;
-  padding: 0.5rem;
-  border-radius: 50%;
-}
-
-.theme-toggle:hover {
-  background: rgba(255,255,255,0.1);
-}
-
-.market-overview-page {
-  max-width: 1200px;
-  margin: 1rem auto;
-  padding: 0 1rem;
-}
-
-/* Section Styles */
-.section {
-  background: white;
-  border-radius: 0.75rem;
-  padding: 1.5rem;
-  margin-bottom: 1.5rem;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-}
-
-.dark .section {
-  background: #2a2a2a;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-}
-
-h2 {
-  color: #2e5c31;
-  margin-bottom: 0.5rem;
-  font-size: 1.5rem;
-}
-
-.dark h2 {
-  color: #6abe6e;
-}
-
-.helper-text {
-  color: #666;
-  margin-bottom: 1.5rem;
-  font-size: 0.9rem;
-}
-
-.dark .helper-text {
-  color: #aaa;
-}
-
-/* Market Summary Cards */
-.market-summary-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 1.5rem;
-}
-
-.market-card {
-  background: #f5f5f5;
-  border-radius: 0.5rem;
-  overflow: hidden;
-}
-
-.dark .market-card {
-  background: #333;
-}
-
-.market-card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 1rem;
-  background: #eee;
-  border-bottom: 1px solid #ddd;
-}
-
-.dark .market-card-header {
-  background: #444;
-  border-bottom: 1px solid #555;
-}
-
-.market-card-header h3 {
-  margin: 0;
-  font-size: 1.1rem;
-  color: #333;
-}
-
-.dark .market-card-header h3 {
-  color: #e0e0e0;
-}
-
-.trend-badge {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 2rem;
-  height: 2rem;
-  border-radius: 50%;
-  color: white;
-}
-
-.trend-badge.up {
-  background: #4caf50;
-}
-
-.trend-badge.down {
-  background: #f44336;
-}
-
-.trend-badge.stable {
-  background: #ff9800;
-}
-
-.market-card-content {
-  padding: 0.5rem;
-}
-
-.trend-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.75rem;
-  border-bottom: 1px solid #eee;
-}
-
-.dark .trend-item {
-  border-bottom: 1px solid #444;
-}
-
-.trend-item:last-child {
-  border-bottom: none;
-}
-
-.trend-info {
+.header {
   display: flex;
   flex-direction: column;
+  gap: 16px;
+  margin-bottom: 24px;
 }
 
-.crop-name {
-  font-weight: 500;
-  margin-bottom: 0.25rem;
+.page-title h1 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: #111827;
+  margin: 0;
 }
 
-.crop-category {
-  font-size: 0.8rem;
-  color: #666;
+.page-title p {
+  font-size: 1rem;
+  color: #6b7280;
+  margin: 4px 0 0 0;
 }
 
-.dark .crop-category {
-  color: #aaa;
-}
-
-.trend-value {
-  font-weight: bold;
-  font-size: 1.1rem;
-}
-
-.trend-value.up {
-  color: #4caf50;
-}
-
-.trend-value.down {
-  color: #f44336;
-}
-
-.trend-value.stable {
-  color: #ff9800;
-}
-
-/* Chart */
-.chart-container {
-  height: 300px;
-  margin-bottom: 1rem;
-}
-
-.season-legend {
+.forecast-controls {
   display: flex;
-  justify-content: center;
-  gap: 1.5rem;
-  margin-top: 1rem;
-}
-
-.season-item {
-  display: flex;
+  gap: 12px;
   align-items: center;
-  gap: 0.5rem;
 }
 
-.season-color {
-  width: 1rem;
-  height: 1rem;
+.period-select,
+.category-select {
+  padding: 10px 14px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  background-color: white;
+}
+
+.generate-btn {
+  padding: 10px 20px;
+  background-color: #2e5c31;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.generate-btn:hover {
+  background-color: #235127;
+}
+
+.loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  gap: 16px;
+}
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid rgba(46, 92, 49, 0.2);
+  border-top: 4px solid #2e5c31;
   border-radius: 50%;
+  animation: spin 1s linear infinite;
 }
 
-.season-color.spring {
-  background: #4caf50;
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 
-.season-color.summer {
-  background: #ff9800;
-}
-
-.season-color.fall {
-  background: #f44336;
-}
-
-.season-color.winter {
-  background: #2196f3;
-}
-
-/* Insights */
-.insights-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 1rem;
-}
-
-.insight-card {
+.error-state {
   display: flex;
-  gap: 1rem;
-  padding: 1rem;
-  background: #f5f5f5;
-  border-radius: 0.5rem;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  gap: 16px;
+  text-align: center;
 }
 
-.dark .insight-card {
-  background: #333;
-}
-
-.insight-icon {
+.error-icon {
+  width: 40px;
+  height: 40px;
+  background-color: #fef2f2;
+  color: #ef4444;
+  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 3rem;
-  height: 3rem;
-  background: #2e5c31;
+  font-weight: bold;
+  font-size: 1.2rem;
+}
+
+.retry-btn {
+  padding: 8px 16px;
+  background-color: #ef4444;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  text-align: center;
+  gap: 16px;
+}
+
+.empty-icon {
+  margin-bottom: 16px;
+}
+
+.forecast-results {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+.forecast-chart-container {
+  background-color: white;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.forecast-chart-container h2 {
+  margin-top: 0;
+  margin-bottom: 20px;
+  color: #111827;
+}
+
+.chart-wrapper {
+  position: relative;
+  height: 400px;
+  width: 100%;
+}
+
+.forecast-recommendations {
+  background-color: white;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.forecast-recommendations h2 {
+  margin-top: 0;
+  margin-bottom: 20px;
+  color: #111827;
+}
+
+.recommendation-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.recommendation-card {
+  display: flex;
+  align-items: center;
+  padding: 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  gap: 16px;
+  position: relative;
+}
+
+.rank-badge {
+  width: 32px;
+  height: 32px;
+  background-color: #2e5c31;
   color: white;
   border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
   flex-shrink: 0;
 }
 
-.dark .insight-icon {
-  background: #6abe6e;
-  color: #1a1a1a;
+.product-info {
+  flex-grow: 1;
 }
 
-.insight-content h3 {
-  margin: 0 0 0.5rem 0;
-  font-size: 1.1rem;
-  color: #2e5c31;
-}
-
-.dark .insight-content h3 {
-  color: #6abe6e;
-}
-
-.insight-content p {
+.product-info h3 {
   margin: 0;
-  font-size: 0.9rem;
-  color: #666;
+  font-size: 1rem;
+  color: #111827;
 }
 
-.dark .insight-content p {
-  color: #aaa;
+.product-info .category {
+  margin: 4px 0 0 0;
+  font-size: 0.85rem;
+  color: #6b7280;
 }
 
-/* Spotlight */
-.spotlight-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 1.5rem;
-}
-
-.spotlight-card {
+.forecast-stats {
   display: flex;
   flex-direction: column;
-  background: #f5f5f5;
-  border-radius: 0.5rem;
-  overflow: hidden;
+  gap: 4px;
 }
 
-.dark .spotlight-card {
-  background: #333;
-}
-
-.spotlight-image {
-  height: 150px;
-  overflow: hidden;
-}
-
-.spotlight-image img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.spotlight-content {
-  padding: 1rem;
-}
-
-.spotlight-content h3 {
-  margin: 0 0 1rem 0;
-  color: #2e5c31;
-}
-
-.dark .spotlight-content h3 {
-  color: #6abe6e;
-}
-
-.spotlight-stats {
-  margin-bottom: 1rem;
-}
-
-.stat-item {
-  margin-bottom: 0.5rem;
+.stat {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .stat-label {
-  display: block;
   font-size: 0.8rem;
-  color: #666;
-  margin-bottom: 0.25rem;
+  color: #6b7280;
 }
 
-.dark .stat-label {
-  color: #aaa;
-}
-
-.stat-bar {
-  height: 0.5rem;
-  background: #ddd;
-  border-radius: 0.25rem;
-  overflow: hidden;
-}
-
-.dark .stat-bar {
-  background: #444;
-}
-
-.stat-fill {
-  height: 100%;
-  background: #2e5c31;
-  border-radius: 0.25rem;
-}
-
-.dark .stat-fill {
-  background: #6abe6e;
-}
-
-.spotlight-description {
+.stat-value {
   font-size: 0.9rem;
-  color: #666;
-  margin: 0;
+  font-weight: 600;
+  color: #111827;
 }
 
-.dark .spotlight-description {
-  color: #aaa;
-}
-
-/* Forecast CTA */
-.forecast-cta {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  padding: 2rem;
-  background: #f5f5f5;
-  border-radius: 0.5rem;
-}
-
-.dark .forecast-cta {
-  background: #333;
-}
-
-.forecast-cta p {
-  margin-bottom: 1.5rem;
-  font-size: 1.1rem;
-}
-
-/* Buttons */
-.primary-btn {
-  background: #2e5c31;
-  color: white;
-  border: none;
-  border-radius: 0.5rem;
-  padding: 0.75rem 1.5rem;
-  font-size: 1rem;
-  font-weight: 500;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background-color 0.2s;
-  text-decoration: none;
-}
-
-.primary-btn:hover {
-  background: #234425;
-}
-
-.dark .primary-btn {
-  background: #6abe6e;
-  color: #1a1a1a;
-}
-
-.dark .primary-btn:hover {
-  background: #58a85c;
-}
-
-/* Responsive */
 @media (max-width: 768px) {
   .main-content {
-    margin-left: 0; /* On mobile, sidebar will be hidden or shown as overlay */
-    padding-top: 60px; /* Add space for a mobile header */
+    margin-left: 0;
+    padding: 16px;
   }
   
-  .top-bar {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    z-index: 90;
-    padding: 0.75rem 1rem;
+  .forecast-controls {
+    flex-direction: column;
+    align-items: stretch;
   }
   
-  .market-overview-page {
-    padding: 0 0.5rem;
-  }
-  
-  .section {
-    padding: 1rem;
-  }
-  
-  .market-summary-cards,
-  .insights-grid,
-  .spotlight-grid {
+  .recommendation-cards {
     grid-template-columns: 1fr;
   }
-  
-  .forecast-cta {
-    padding: 1.5rem 1rem;
-  }
-  
-  .top-bar h1 {
-    font-size: 1.25rem;
-  }
+}
+
+/* Dark mode styles */
+:global(.dark) .main-content {
+  background-color: #111827;
+}
+
+:global(.dark) .page-title h1,
+:global(.dark) .forecast-chart-container h2,
+:global(.dark) .forecast-recommendations h2,
+:global(.dark) .product-info h3,
+:global(.dark) .stat-value {
+  color: #f9fafb;
+}
+
+:global(.dark) .page-title p,
+:global(.dark) .product-info .category,
+:global(.dark) .stat-label {
+  color: #9ca3af;
+}
+
+:global(.dark) .period-select,
+:global(.dark) .category-select {
+  background-color: #1f2937;
+  border-color: #374151;
+  color: #e5e7eb;
+}
+
+:global(.dark) .forecast-chart-container,
+:global(.dark) .forecast-recommendations,
+:global(.dark) .recommendation-card {
+  background-color: #1f2937;
+  border-color: #374151;
+}
+
+:global(.dark) .recommendation-card {
+  background-color: #1f2937;
+  border-color: #374151;
 }
 </style>
