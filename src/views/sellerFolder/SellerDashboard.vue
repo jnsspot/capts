@@ -2,6 +2,17 @@
   <div class="dashboard-container">
     <Sidebar initialActiveItem="Dashboard" />
     
+    <!-- Logout Confirmation Modal -->
+    <ConfirmModal 
+      :isVisible="showLogoutModal" 
+      @confirm="handleLogoutConfirm" 
+      @cancel="handleLogoutCancel"
+    >
+      <template #default>
+        <p>Are you sure you want to logout?</p>
+      </template>
+    </ConfirmModal>
+    
     <div class="main-content">
       <header class="header">
         <div class="search-container">
@@ -11,7 +22,7 @@
           </div>
         </div>
         
-        <div class="user-profile" @click="toggleProfileMenu" ref="profileRef">
+        <div class="user-profile" @click.stop="toggleProfileMenu" ref="profileRef">
           <div class="notification-icon">
             <Bell size="20" />
           </div>
@@ -19,7 +30,8 @@
             <img src="https://randomuser.me/api/portraits/men/32.jpg" alt="User avatar" />
           </div>
           <div class="user-info">
-            <h3>Antonio Yanto</h3>
+            <h3>{{ firstName }} {{ lastName }}</h3>
+            
             <p>Lead of Sales</p>
           </div>
 
@@ -30,10 +42,10 @@
                 <img src="https://randomuser.me/api/portraits/men/32.jpg" alt="User avatar" />
               </div>
               <div>
-                <h3>Stebin Ben</h3>
-                <p>UI/UX Designer</p>
+                <h3>{{ accountName }}</h3>
+                <p>{{ farmName }}</p>
               </div>
-              <button class="logout-btn">
+              <button class="logout-btn" @click.stop="initiateLogout">
                 <LogOut size="18" />
               </button>
             </div>
@@ -42,7 +54,7 @@
               <button 
                 class="tab-btn" 
                 :class="{ active: activeTab === 'profile' }" 
-                @click="setActiveTab('profile')"
+                @click.stop="setActiveTab('profile')"
               >
                 <User size="18" />
                 Profile
@@ -50,7 +62,7 @@
               <button 
                 class="tab-btn" 
                 :class="{ active: activeTab === 'setting' }" 
-                @click="setActiveTab('setting')"
+                @click.stop="setActiveTab('setting')"
               >
                 <Settings size="18" />
                 Setting
@@ -74,7 +86,7 @@
                 <CreditCard size="18" />
                 Billing
               </button>
-              <button class="menu-item">
+              <button class="menu-item" @click.stop="initiateLogout">
                 <LogOut size="18" />
                 Logout
               </button>
@@ -162,6 +174,63 @@ import SalesRevenueChart from '@/components/SalesRevenueChart.vue';
 import SalesPerformance from '@/components/SalesPerformance.vue';
 import TopSales from '@/components/TopSales.vue';
 import RecentOrders from '@/components/RecentOrders.vue';
+import ConfirmModal from '@/components/ConfirmModal.vue';
+import { auth, db } from '@/firebase/firebaseConfig';
+import { signOut } from 'firebase/auth';
+import { useRouter } from 'vue-router';
+import { doc, getDoc } from 'firebase/firestore';
+
+
+const router = useRouter();
+
+// User data
+const firstName = ref('');
+const lastName = ref('');
+const accountName = ref('');
+const farmName = ref('');
+
+// Logout modal state
+const showLogoutModal = ref(false);
+
+// Fetch user data
+const fetchUserData = async () => {
+  try {
+    const userId = auth.currentUser?.uid;
+    if (!userId) {
+      console.error('No user ID found');
+      return;
+    }
+
+    console.log('Fetching data for user ID:', userId); // Debug log
+
+    // Fetch from users collection
+    const userDoc = await getDoc(doc(db, 'users', userId));
+    console.log('User document:', userDoc.exists() ? userDoc.data() : 'No user document'); // Debug log
+
+    if (userDoc.exists()) {
+      const userData = userDoc.data();
+      firstName.value = userData.firstName || '';
+      lastName.value = userData.lastName || '';
+    }
+
+    // Fetch from sellers collection
+    const sellerDoc = await getDoc(doc(db, 'sellers', userId));
+    console.log('Seller document:', sellerDoc.exists() ? sellerDoc.data() : 'No seller document'); // Debug log
+
+    if (sellerDoc.exists()) {
+      const sellerData = sellerDoc.data();
+      accountName.value = sellerData.accountName || '';
+      farmName.value = sellerData.farmName || '';
+      
+      console.log('Fetched seller data:', { // Debug log
+        accountName: accountName.value,
+        farmName: farmName.value
+      });
+    }
+  } catch (error) {
+    console.error('Error fetching user data:', error);
+  }
+};
 
 // Profile dropdown state
 const showProfileMenu = ref(false);
@@ -183,8 +252,32 @@ const handleClickOutside = (event) => {
   }
 };
 
+// Logout functions
+const initiateLogout = () => {
+  showLogoutModal.value = true;
+  showProfileMenu.value = false;
+};
+
+const handleLogoutConfirm = async () => {
+  try {
+    localStorage.clear();
+    sessionStorage.clear();
+    await signOut(auth);
+    router.push('/login');
+  } catch (error) {
+    console.error('Error logging out:', error);
+  } finally {
+    showLogoutModal.value = false;
+  }
+};
+
+const handleLogoutCancel = () => {
+  showLogoutModal.value = false;
+};
+
 onMounted(() => {
   document.addEventListener('click', handleClickOutside);
+  fetchUserData();
 });
 
 onBeforeUnmount(() => {
@@ -267,6 +360,7 @@ const setTopSalesPeriod = (period) => {
   topSalesPeriod.value = period;
 };
 </script>
+
 
 <style scoped>
 .dashboard-container {

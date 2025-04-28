@@ -1,14 +1,15 @@
 <template>
   <div class="sidebar" :class="{ 'dark-mode': isDarkMode, 'collapsed': isCollapsed }">
-    <div class="toggle-button" @click="toggleSidebar">
-      <div class="toggle-icon"></div>
-    </div>
-    
     <div class="logo-container">
       <div class="logo-icon">
         <div class="logo-circle"></div>
       </div>
       <h1 class="logo-text">FarmXpress</h1>
+      <button class="hamburger-btn" @click="toggleSidebar">
+        <svg viewBox="0 0 24 24" width="24" height="24">
+          <path fill="currentColor" d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/>
+        </svg>
+      </button>
     </div>
     
     <nav class="nav-menu">
@@ -39,14 +40,13 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from 'vue';
+import { ref, onMounted } from 'vue';
 import { 
   LayoutDashboard, 
   Sprout, 
   Users, 
   BarChart, 
   Receipt, 
-  Tag, 
   MessageSquare, 
   ThumbsUp, 
   HelpCircle, 
@@ -55,7 +55,6 @@ import {
   Moon,
   TrendingUp,
   Calendar,
-  Truck,
   FileText
 } from 'lucide-vue-next';
 
@@ -65,8 +64,6 @@ const props = defineProps({
     default: 'Dashboard'
   }
 });
-
-const emit = defineEmits(['sidebarToggle']);
 
 const activeItem = ref(props.initialActiveItem);
 const isDarkMode = ref(false);
@@ -78,11 +75,9 @@ const menuItems = [
   { name: 'Forecasting', path: '/seller/forecasting', icon: TrendingUp },
   { name: 'Harvest Calendar', path: '/calendar', icon: Calendar },
   { name: 'Customers', path: '/customers', icon: Users },
-  { name: 'Analytics', path: '/seller/analytics', icon: BarChart },
+  { name: 'Analytics', path: 'seller/analytics', icon: BarChart },
   { name: 'Orders', path: '/orders', icon: Receipt },
-  { name: 'Delivery', path: '/delivery', icon: Truck },
-  { name: 'Promotions', path: '/promotions', icon: Tag },
-  { name: 'Chat', path: '/chat', icon: MessageSquare, badge: 8 },
+  { name: 'Chat', path: 'seller/chat', icon: MessageSquare, badge: 8 },
   { name: 'Feedback', path: '/feedback', icon: ThumbsUp },
   { name: 'Reports', path: '/reports', icon: FileText },
   { name: 'Help', path: '/help', icon: HelpCircle },
@@ -107,30 +102,19 @@ const setDarkMode = () => {
 
 const toggleSidebar = () => {
   isCollapsed.value = !isCollapsed.value;
-  localStorage.setItem('sidebar-collapsed', isCollapsed.value.toString());
-  emit('sidebarToggle', isCollapsed.value);
+  localStorage.setItem('sidebarCollapsed', isCollapsed.value);
 };
 
-watch(isCollapsed, (newValue) => {
-  // Emit the event whenever isCollapsed changes
-  emit('sidebarToggle', newValue);
-});
-
 onMounted(() => {
-  // Load theme preference
   const savedTheme = localStorage.getItem('theme');
   if (savedTheme === 'dark') {
     setDarkMode();
   }
   
-  // Load sidebar state
-  const savedSidebarState = localStorage.getItem('sidebar-collapsed');
-  if (savedSidebarState === 'true') {
+  const savedCollapseState = localStorage.getItem('sidebarCollapsed');
+  if (savedCollapseState === 'true') {
     isCollapsed.value = true;
   }
-  
-  // Emit initial sidebar state
-  emit('sidebarToggle', isCollapsed.value);
 });
 </script>
 
@@ -148,46 +132,21 @@ onMounted(() => {
   left: 0;
   top: 0;
   z-index: 100;
+  padding: 0;
 }
 
 .sidebar.collapsed {
-  width: 60px;
-}
-
-.toggle-button {
-  position: absolute;
-  top: 10px;
-  right: -12px;
-  width: 24px;
-  height: 24px;
-  background-color: #ffffff;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
-  z-index: 101;
-}
-
-.toggle-icon {
-  width: 10px;
-  height: 10px;
-  border-top: 2px solid #2e5c31;
-  border-right: 2px solid #2e5c31;
-  transform: rotate(45deg);
-  transition: transform 0.3s ease;
-}
-
-.sidebar.collapsed .toggle-icon {
-  transform: rotate(225deg);
+  width: 70px;
 }
 
 .logo-container {
   display: flex;
   align-items: center;
-  padding: 12px 15px;
+  padding: 12px 10px;
   gap: 8px;
+  position: relative;
+  margin: 0;
+  min-height: 56px;
 }
 
 .logo-icon {
@@ -196,6 +155,14 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.3s ease;
+}
+
+.sidebar.collapsed .logo-icon {
+  width: 0;
+  opacity: 0;
+  overflow: hidden;
 }
 
 .logo-circle {
@@ -203,15 +170,20 @@ onMounted(() => {
   height: 26px;
   border-radius: 50%;
   background: linear-gradient(135deg, #ffffff, #e0e0e0);
+  transition: all 0.3s ease;
+}
+
+.sidebar.collapsed .logo-circle {
+  opacity: 0;
+  width: 0;
 }
 
 .logo-text {
-  font-size: 1.4rem;
+  font-size: 1.3rem;
   font-weight: 700;
   color: #ffffff;
   white-space: nowrap;
-  opacity: 1;
-  transition: opacity 0.3s ease;
+  transition: all 0.3s ease;
 }
 
 .sidebar.collapsed .logo-text {
@@ -220,9 +192,41 @@ onMounted(() => {
   overflow: hidden;
 }
 
+.hamburger-btn {
+  background: none;
+  border: none;
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  position: absolute;
+  right: 8px;
+  width: 40px;
+  height: 40px;
+}
+
+.sidebar.collapsed .hamburger-btn {
+  position: static;
+  margin: 0 auto;
+}
+
+.hamburger-btn svg {
+  width: 24px;
+  height: 24px;
+}
+
+.hamburger-btn:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
 .nav-menu {
   flex: 1;
-  margin-top: 5px;
+  margin-top: 8px;
+  padding: 0 8px;
 }
 
 .nav-menu ul {
@@ -232,19 +236,21 @@ onMounted(() => {
 }
 
 .nav-menu li {
-  margin: 4px 0;
+  margin: 6px 0;
   position: relative;
 }
 
 .nav-link {
   display: flex;
   align-items: center;
-  padding: 10px 15px;
+  padding: 10px 12px;
   color: rgba(255, 255, 255, 0.8);
   text-decoration: none;
   transition: all 0.2s ease;
-  border-radius: 0;
   border-left: 3px solid transparent;
+  white-space: nowrap;
+  overflow: hidden;
+  border-radius: 6px;
 }
 
 .nav-link:hover {
@@ -263,7 +269,7 @@ onMounted(() => {
   margin-right: 12px;
   width: 20px;
   height: 20px;
-  min-width: 20px;
+  flex-shrink: 0;
 }
 
 .sidebar.collapsed .nav-icon {
@@ -271,9 +277,8 @@ onMounted(() => {
 }
 
 .nav-text {
-  white-space: nowrap;
-  transition: opacity 0.3s ease, width 0.3s ease;
-  opacity: 1;
+  transition: all 0.3s ease;
+  font-size: 0.95rem;
 }
 
 .sidebar.collapsed .nav-text {
@@ -294,30 +299,34 @@ onMounted(() => {
   font-size: 0.75rem;
   margin-left: auto;
   font-weight: bold;
-  transition: opacity 0.3s ease;
 }
 
 .sidebar.collapsed .badge {
-  opacity: 0;
-  width: 0;
-  overflow: hidden;
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  transform: scale(0.8);
 }
 
 .theme-toggle {
   display: flex;
-  margin: 15px;
+  margin: 12px 8px;
   background-color: rgba(255, 255, 255, 0.15);
   border-radius: 8px;
   padding: 4px;
-  transition: opacity 0.3s ease;
+  overflow: hidden;
+  transition: all 0.3s ease;
 }
 
 .sidebar.collapsed .theme-toggle {
-  opacity: 0;
-  height: 0;
-  margin: 0;
-  padding: 0;
-  overflow: hidden;
+  flex-direction: column;
+  align-items: center;
+  padding: 4px;
+  gap: 4px;
+}
+
+.sidebar.collapsed .theme-toggle span {
+  display: none;
 }
 
 .theme-btn {
@@ -333,6 +342,8 @@ onMounted(() => {
   cursor: pointer;
   color: rgba(255, 255, 255, 0.8);
   transition: all 0.2s ease;
+  white-space: nowrap;
+  font-size: 0.85rem;
 }
 
 .theme-btn.active {
@@ -354,33 +365,25 @@ onMounted(() => {
   color: #ffffff;
 }
 
-/* Responsive styles */
-@media (max-width: 768px) {
-  .sidebar {
-    transform: translateX(0);
-  }
-  
-  .sidebar.collapsed {
-    transform: translateX(-100%);
-    width: 230px;
-  }
-  
-  .sidebar.collapsed .logo-text,
-  .sidebar.collapsed .nav-text,
-  .sidebar.collapsed .badge,
-  .sidebar.collapsed .theme-toggle {
-    opacity: 1;
-    width: auto;
-    height: auto;
-  }
-  
-  .sidebar.collapsed .theme-toggle {
-    margin: 15px;
-    padding: 4px;
-  }
-  
-  .toggle-button {
-    right: 10px;
-  }
+/* Tooltip for collapsed state */
+.sidebar.collapsed li {
+  position: relative;
+}
+
+.sidebar.collapsed li:hover::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  background-color: #4a8f4d;
+  color: white;
+  padding: 5px 10px;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  z-index: 1000;
+  margin-left: 10px;
+  pointer-events: none;
 }
 </style>

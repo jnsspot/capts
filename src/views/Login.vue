@@ -50,96 +50,132 @@ export default {
       alertType: '',
     };
   },
-  mounted() {
-    this.checkStoredSession();
-  },
   methods: {
     async login() {
-  try {
-    const userCredential = await signInWithEmailAndPassword(auth, this.email, this.password);
-    const user = userCredential.user;
+      try {
+        const userCredential = await signInWithEmailAndPassword(auth, this.email, this.password);
+        const user = userCredential.user;
 
-    if (!user.emailVerified) {
-      this.showAlert('Please verify your email before logging in.', 'warning');
-      return;
-    }
+        if (!user.emailVerified) {
+          this.showAlert('Please verify your email before logging in.', 'warning');
+          return;
+        }
 
-    let userData = null;
-    let collectionName = '';
+        let userData = null;
+        let collectionName = '';
 
-    // Check if user is an admin
-    const adminQuery = query(collection(db, 'admins'), where('email', '==', this.email), where('role', '==', 'admin'));
-    const adminSnapshot = await getDocs(adminQuery);
+        // Check if user is an admin
+        const adminQuery = query(collection(db, 'admins'), where('email', '==', this.email), where('role', '==', 'admin'));
+        const adminSnapshot = await getDocs(adminQuery);
 
-    if (!adminSnapshot.empty) {
-      userData = adminSnapshot.docs[0].data();
-      collectionName = 'admins';
-    } else {
-      // Check if user is a customer or seller in the 'users' collection
-      const userQuery = query(collection(db, 'users'), where('email', '==', this.email) );
-      const userSnapshot = await getDocs(userQuery);
+        if (!adminSnapshot.empty) {
+          userData = adminSnapshot.docs[0].data();
+          collectionName = 'admins';
+        } else {
+          // Check if user is a customer or seller in the 'users' collection
+          const userQuery = query(collection(db, 'users'), where('email', '==', this.email));
+          const userSnapshot = await getDocs(userQuery);
 
-      if (!userSnapshot.empty) {
-        userData = userSnapshot.docs[0].data();
-        collectionName = 'users';
-      }
-    }
+          if (!userSnapshot.empty) {
+            userData = userSnapshot.docs[0].data();
+            collectionName = 'users';
+          }
+        }
 
-    if (!userData) {
-      this.showAlert('Invalid credentials or unauthorized access.', 'error');
-      return;
-    }
+        if (!userData) {
+          this.showAlert('Invalid credentials or unauthorized access.', 'error');
+          return;
+        }
 
-    // 🔍 **Check if account is verified (isVerified must be true)**
-    if (!userData.isVerified) {
-      this.showAlert('Your account is not verified. Please contact support.', 'warning');
-      return;
-    }
+        if (!userData.isVerified) {
+          this.showAlert('Your account is not verified. Please contact support.', 'warning');
+          return;
+        }
 
-    // Store user session
-    this.saveUserData(user.uid, userData.email, userData.role, collectionName, this.rememberMe);
+        // Only store minimal auth state, not user data
+        if (this.rememberMe) {
+          localStorage.setItem("authPersist", "true");
+        } else {
+          sessionStorage.setItem("authPersist", "true");
+        }
 
-    // Redirect based on role
-    if (userData.role === 'admin') {
-      this.$router.push('/admin');
-    } else if (userData.role === 'customer') {
-      this.$router.push('/');
-    } else if (userData.role === 'seller') {
-      this.$router.push('/seller-dashboard');
-    } else {
-      this.showAlert('Invalid role assigned to user.', 'error');
-    }
+        // Redirect based on role
+        if (userData.role === 'admin') {
+          this.$router.push('/admin');
+        } else if (userData.role === 'customer') {
+          this.$router.push('/');
+        } else if (userData.role === 'seller') {
+          this.$router.push('/seller-dashboard');
+        } else {
+          this.showAlert('Invalid role assigned to user.', 'error');
+        }
 
-    this.showAlert('Login Successful!', 'success');
-  } catch (error) {
-    console.error('Login Error:', error);
-    this.showAlert('Login failed! Check your credentials.', 'error');
-  }
-},
-
-    saveUserData(id, email, role, collectionName, rememberMe) {
-      const userData = { id, email, role, collection: collectionName };
-
-      if (rememberMe) {
-        localStorage.setItem("user", JSON.stringify(userData));
-      } else {
-        sessionStorage.setItem("user", JSON.stringify(userData));
+        this.showAlert('Login Successful!', 'success');
+      } catch (error) {
+        console.error('Login Error:', error);
+        this.showAlert('Login failed! Check your credentials.', 'error');
       }
     },
 
-    checkStoredSession() {
-      let userData = localStorage.getItem("user") || sessionStorage.getItem("user");
+    // Removed saveUserData method as we're not storing user data anymore
 
-      if (userData) {
-        userData = JSON.parse(userData);
-        this.$router.push(userData.role === "admin" ? "/admin-dashboard" : "/");
+    async checkStoredSession() {
+      // Check if user is already authenticated via Firebase Auth
+      const user = auth.currentUser;
+      if (user) {
+        // User is authenticated, fetch fresh data from server
+        try {
+          const userData = await this.fetchUserData(user.email);
+          if (userData) {
+            // Redirect based on role
+            if (userData.role === 'admin') {
+              this.$router.push('/admin');
+            } else if (userData.role === 'customer') {
+              this.$router.push('/');
+            } else if (userData.role === 'seller') {
+              this.$router.push('/seller-dashboard');
+            }
+          }
+        } catch (error) {
+          console.error('Error fetching user data:', error);
+        }
       }
     },
 
-    logout() {
-      sessionStorage.removeItem("user");
-      localStorage.removeItem("user");
-      this.$router.push("/login");
+    async fetchUserData(email) {
+      try {
+        // Check admin collection first
+        const adminQuery = query(collection(db, 'admins'), where('email', '==', email));
+        const adminSnapshot = await getDocs(adminQuery);
+
+        if (!adminSnapshot.empty) {
+          return adminSnapshot.docs[0].data();
+        }
+
+        // Check users collection
+        const userQuery = query(collection(db, 'users'), where('email', '==', email));
+        const userSnapshot = await getDocs(userQuery);
+
+        if (!userSnapshot.empty) {
+          return userSnapshot.docs[0].data();
+        }
+
+        return null;
+      } catch (error) {
+        console.error('Error fetching user data:', error);
+        return null;
+      }
+    },
+
+    async logout() {
+      try {
+        await auth.signOut();
+        localStorage.removeItem("authPersist");
+        sessionStorage.removeItem("authPersist");
+        this.$router.push("/login");
+      } catch (error) {
+        console.error('Logout error:', error);
+      }
     },
 
     forgotPassword() {
@@ -154,6 +190,9 @@ export default {
       }, 3000);
     },
   },
+  mounted() {
+    this.checkStoredSession();
+  }
 };
 </script>
 

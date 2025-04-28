@@ -362,15 +362,15 @@
   };
   
  // In the selectConversation function:
-const selectConversation = async (conversation) => {
+ const selectConversation = async (conversation) => {
   selectedConversationId.value = conversation.id;
   selectedConversation.value = conversation;
   
-  // Mark as read - FIXED: Added missing closing parenthesis
+  // Mark as read if needed
   if (conversation.unreadCount > 0 && conversation.lastMessageSender === 'customer') {
     await updateDoc(doc(db, 'conversations', conversation.id), {
       unreadCount: 0
-    });  // <-- This was missing
+    });
   }
   
   // Load messages for this conversation
@@ -402,38 +402,32 @@ const selectConversation = async (conversation) => {
   
   // Send a message
   const sendMessage = async () => {
-    if (!newMessage.value.trim() || !selectedConversationId.value) return;
-    
-    const message = {
-      senderId: sellerId,
-      senderType: 'seller',
-      text: newMessage.value,
-      timestamp: serverTimestamp(),
-      read: false
-    };
-    
-    // Add message to Firestore
-    await addDoc(
-      collection(db, 'conversations', selectedConversationId.value, 'messages'),
-      message
-    );
-    
-    // Update conversation last message
-    await updateDoc(doc(db, 'conversations', selectedConversationId.value), {
-      lastMessage: newMessage.value,
-      lastMessageTime: serverTimestamp(),
-      lastMessageSender: 'seller',
-      unreadCount: 0 // Reset unread count since seller is sending
-    });
-    
-    // Clear input
-    newMessage.value = '';
-    
-    // Resize textarea
-    if (messageInput.value) {
-      messageInput.value.style.height = 'auto';
-    }
+  if (!newMessage.value.trim() || !selectedConversationId.value) return;
+  
+  const message = {
+    senderId: sellerId,
+    senderType: 'seller',
+    text: newMessage.value,
+    timestamp: serverTimestamp(),
+    read: false
   };
+  
+  // Add message to Firestore
+  await addDoc(
+    collection(db, 'conversations', selectedConversationId.value, 'messages'),
+    message
+  );
+  
+  // Update conversation last message
+  await updateDoc(doc(db, 'conversations', selectedConversationId.value), {
+    lastMessage: newMessage.value,
+    lastMessageTime: serverTimestamp(),
+    lastMessageSender: 'seller',
+    unreadCount: 1 // Customer has unread message
+  });
+  
+  newMessage.value = '';
+};
   
   // Send a quick reply
   const sendQuickReply = (reply) => {
