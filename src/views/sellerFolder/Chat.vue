@@ -36,7 +36,19 @@
               </button>
             </div>
             
-            <div class="conversation-list">
+            <div v-if="loadingConversations" class="loading-state">
+              <p>Loading conversations...</p>
+            </div>
+            
+            <div v-else-if="filteredConversations.length === 0" class="empty-state">
+              <div class="empty-icon">
+                <MessageSquare size="48" />
+              </div>
+              <h2>No conversations yet</h2>
+              <p>Your conversations with customers will appear here</p>
+            </div>
+            
+            <div v-else class="conversation-list">
               <div 
                 v-for="conversation in filteredConversations" 
                 :key="conversation.id"
@@ -51,7 +63,7 @@
                 <div class="conversation-info">
                   <div class="conversation-header">
                     <h3>{{ conversation.name }}</h3>
-                    <span class="conversation-time">{{ conversation.lastMessageTime }}</span>
+                    <span class="conversation-time">{{ formatTime(conversation.lastMessageTime) }}</span>
                   </div>
                   <p class="conversation-preview">{{ conversation.lastMessage }}</p>
                 </div>
@@ -87,18 +99,18 @@
             
             <div v-if="currentConversation" class="chat-messages">
               <div 
-                v-for="(message, index) in currentConversation.messages" 
-                :key="index"
-                :class="['message', message.sender === 'me' ? 'outgoing' : 'incoming']"
+                v-for="message in chatMessages" 
+                :key="message.id"
+                :class="['message', message.senderId === currentSellerId ? 'outgoing' : 'incoming']"
               >
-                <div v-if="message.sender !== 'me'" class="message-avatar">
+                <div v-if="message.senderId !== currentSellerId" class="message-avatar">
                   <img :src="currentConversation.avatar" :alt="`${currentConversation.name}'s avatar`" />
                 </div>
                 <div class="message-content">
                   <div class="message-bubble">
                     {{ message.text }}
                   </div>
-                  <div class="message-time">{{ message.time }}</div>
+                  <div class="message-time">{{ formatTime(message.timestamp) }}</div>
                 </div>
               </div>
             </div>
@@ -112,11 +124,12 @@
                 placeholder="Type a message..." 
                 v-model="newMessage"
                 @keyup.enter="sendMessage"
+                :disabled="sendingMessage"
               />
               <button class="input-action">
                 <Smile size="18" />
               </button>
-              <button class="send-button" @click="sendMessage">
+              <button class="send-button" @click="sendMessage" :disabled="!newMessage.trim() || sendingMessage">
                 <Send size="18" />
               </button>
             </div>
@@ -135,7 +148,7 @@
   </template>
   
   <script setup>
-  import { ref, computed } from 'vue';
+  import { ref, computed, onMounted, onUnmounted } from 'vue';
   import Sidebar from '@/components/Sidebar.vue';
   import { 
     Search, 
@@ -147,148 +160,69 @@
     Send,
     MessageSquare
   } from 'lucide-vue-next';
+  import { 
+    collection, 
+    query, 
+    where, 
+    orderBy, 
+    onSnapshot, 
+    doc, 
+    addDoc, 
+    updateDoc, 
+    serverTimestamp,
+    getDoc,
+    setDoc
+  } from "firebase/firestore";
+  import { db, auth } from "@/firebase/firebaseConfig";
   
   const searchQuery = ref('');
   const activeTab = ref('customers');
   const activeConversation = ref(null);
   const newMessage = ref('');
+  const conversations = ref([]);
+  const chatMessages = ref([]);
+  const loadingConversations = ref(true);
+  const sendingMessage = ref(false);
   
-  const conversations = ref([
-    {
-      id: 1,
-      name: 'John Doe',
-      avatar: 'https://randomuser.me/api/portraits/men/1.jpg',
-      status: 'online',
-      lastMessage: "I'd like to place an order for next week",
-      lastMessageTime: '10:30 AM',
-      unread: 2,
-      type: 'customer',
-      messages: [
-        {
-          sender: 'other',
-          lastMessage: "I'd like to place an order for next week",
-          time: '10:15 AM'
-        },
-        {
-          sender: 'me',
-          text: 'Hi John! Thanks for your interest. We have fresh organic tomatoes available right now.',
-          time: '10:20 AM'
-        },
-        {
-          sender: 'other',
-          lastMessage: "I'd like to place an order for next week",
-          time: '10:30 AM'
-        }
-      ]
-    },
-    {
-      id: 2,
-      name: 'Jane Smith',
-      avatar: 'https://randomuser.me/api/portraits/women/2.jpg',
-      status: 'offline',
-      lastMessage: 'Thanks for the quick delivery!',
-      lastMessageTime: 'Yesterday',
-      unread: 0,
-      type: 'customer',
-      messages: [
-        {
-          sender: 'other',
-          text: 'I received my order today.',
-          time: 'Yesterday, 2:15 PM'
-        },
-        {
-          sender: 'me',
-          time: 'Yesterday, 2:20 PM'
-        },
-        {
-          sender: 'other',
-          text: 'Thanks for the quick delivery!',
-          time: 'Yesterday, 2:25 PM'
-        }
-      ]
-    },
-    {
-      id: 3,
-      name: 'Mike Johnson',
-      avatar: 'https://randomuser.me/api/portraits/men/3.jpg',
-      status: 'online',
-      lastMessage: 'We need to restock carrots',
-      lastMessageTime: '2:45 PM',
-      unread: 1,
-      type: 'team',
-      messages: [
-        {
-          sender: 'other',
-          text: 'Hey, just checking our inventory.',
-          time: '2:30 PM'
-        },
-        {
-          sender: 'me',
-          text: 'How are we looking?',
-          time: '2:35 PM'
-        },
-        {
-          sender: 'other',
-          text: 'We need to restock carrots',
-          time: '2:45 PM'
-        }
-      ]
-    },
-    {
-      id: 4,
-      name: 'Sarah Wilson',
-      avatar: 'https://randomuser.me/api/portraits/women/4.jpg',
-      status: 'offline',
-      lastMessage: 'The new organic certification is ready',
-      lastMessageTime: 'Monday',
-      unread: 0,
-      type: 'team',
-      messages: [
-        {
-          sender: 'other',
-          text: "I'd like to place an order for next week",
-          time: 'Monday, 11:15 AM'
-        },
-        {
-          sender: 'me',
-          text:"I'd like to place an order for next week",
-          time: 'Monday, 11:20 AM'
-        },
-        {
-          sender: 'other',
-          text: 'The new organic certification is ready',
-          time: 'Monday, 11:30 AM'
-        }
-      ]
-    },
-    {
-      id: 5,
-      name: 'David Brown',
-      avatar: 'https://randomuser.me/api/portraits/men/5.jpg',
-      status: 'online',
-      lastMessage: 'Do you have any lettuce available?',
-      lastMessageTime: '9:15 AM',
-      unread: 0,
-      type: 'customer',
-      messages: [
-        {
-          sender: 'other',
-          text: 'Good morning!',
-          time: '9:10 AM'
-        },
-        {
-          sender: 'me',
-          text: 'Good morning, David! How can I help you today?',
-          time: '9:12 AM'
-        },
-        {
-          sender: 'other',
-          text: 'Do you have any lettuce available?',
-          time: '9:15 AM'
-        }
-      ]
-    }
-  ]);
+  // Get current seller ID
+  const currentSellerId = auth.currentUser?.uid;
+  
+  // Fetch conversations for the seller
+  const fetchConversations = () => {
+    const q = query(
+      collection(db, "conversations"),
+      where("participants", "array-contains", currentSellerId),
+      orderBy("lastMessageTime", "desc")
+    );
+  
+    return onSnapshot(q, async (snapshot) => {
+      const convs = [];
+      
+      for (const doc of snapshot.docs) {
+        const data = doc.data();
+        const customerId = data.participants.find(id => id !== currentSellerId);
+        
+        // Get customer details
+        const customerDoc = await getDoc(doc(db, "users", customerId));
+        const customerData = customerDoc.data() || {};
+        
+        convs.push({
+          id: doc.id,
+          name: `${customerData.firstName || ''} ${customerData.lastName || ''}`.trim() || 'Customer',
+          avatar: customerData.photoURL || "https://randomuser.me/api/portraits/lego/1.jpg",
+          status: customerData.isOnline ? 'online' : 'offline',
+          lastMessage: data.lastMessage,
+          lastMessageTime: data.lastMessageTime,
+          unread: data.unreadCount || 0,
+          type: 'customer',
+          customerId: customerId
+        });
+      }
+      
+      conversations.value = convs;
+      loadingConversations.value = false;
+    });
+  };
   
   const filteredConversations = computed(() => {
     return conversations.value.filter(conversation => 
@@ -306,41 +240,108 @@
     activeConversation.value = null;
   };
   
-  const setActiveConversation = (id) => {
+  const setActiveConversation = async (id) => {
     activeConversation.value = id;
-    // Mark as read when opening conversation
     const conversation = conversations.value.find(c => c.id === id);
-    if (conversation) {
+    
+    if (conversation && conversation.unread > 0) {
+      // Mark as read
+      await updateDoc(doc(db, "conversations", id), {
+        unreadCount: 0
+      });
       conversation.unread = 0;
+    }
+    
+    // Load messages
+    loadMessages(id);
+  };
+  
+  const loadMessages = (conversationId) => {
+    const q = query(
+      collection(db, "conversations", conversationId, "messages"),
+      orderBy("timestamp", "asc")
+    );
+    
+    return onSnapshot(q, (snapshot) => {
+      chatMessages.value = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      scrollToBottom();
+    });
+  };
+  
+  const sendMessage = async () => {
+    if (!newMessage.value.trim() || !currentConversation.value || sendingMessage.value) return;
+    
+    sendingMessage.value = true;
+    const message = {
+      senderId: currentSellerId,
+      text: newMessage.value,
+      timestamp: serverTimestamp(),
+      read: false
+    };
+    
+    try {
+      // Add message to Firestore
+      await addDoc(
+        collection(db, "conversations", currentConversation.value.id, "messages"),
+        message
+      );
+      
+      // Update conversation last message
+      await updateDoc(doc(db, "conversations", currentConversation.value.id), {
+        lastMessage: newMessage.value,
+        lastMessageTime: serverTimestamp(),
+        lastMessageSender: "seller",
+        unreadCount: 1 // Customer has unread message
+      });
+      
+      newMessage.value = "";
+    } catch (error) {
+      console.error("Error sending message:", error);
+    } finally {
+      sendingMessage.value = false;
     }
   };
   
-  const sendMessage = () => {
-    if (!newMessage.value.trim() || !currentConversation.value) return;
+  const scrollToBottom = () => {
+    const messagesContainer = document.querySelector('.chat-messages');
+    if (messagesContainer) {
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+  };
+  
+  let conversationsUnsubscribe = null;
+  let messagesUnsubscribe = null;
+  
+  onMounted(() => {
+    conversationsUnsubscribe = fetchConversations();
+  });
+  
+  onUnmounted(() => {
+    if (conversationsUnsubscribe) {
+      conversationsUnsubscribe();
+    }
+    if (messagesUnsubscribe) {
+      messagesUnsubscribe();
+    }
+  });
+  
+  // Add this function to format timestamps
+  const formatTime = (timestamp) => {
+    if (!timestamp) return '';
     
-    currentConversation.value.messages.push({
-      sender: 'me',
-      text: newMessage.value,
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    });
+    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+    const now = new Date();
+    const diffInDays = Math.floor((now - date) / (1000 * 60 * 60 * 24));
     
-    currentConversation.value.lastMessage = newMessage.value;
-    currentConversation.value.lastMessageTime = 'Just now';
-    
-    newMessage.value = '';
-    
-    // Simulate reply after 1-3 seconds
-    if (Math.random() > 0.5) {
-      setTimeout(() => {
-        currentConversation.value.messages.push({
-          sender: 'other',
-          text: "I'd like to place an order for next week",
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        });
-        
-        currentConversation.value.lastMessage = "I'd like to place an order for next week",
-        currentConversation.value.lastMessageTime = 'Just now';
-      }, 1000 + Math.random() * 2000);
+    if (diffInDays === 0) {
+      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } else if (diffInDays === 1) {
+      return 'Yesterday';
+    } else {
+      return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
     }
   };
   </script>
@@ -858,6 +859,39 @@
   
   :global(.dark) .send-button:hover {
     background-color: #3e7b40;
+  }
+  
+  .loading-state {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100px;
+    color: #6b7280;
+  }
+  
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+    text-align: center;
+    color: #6b7280;
+  }
+  
+  .empty-state h2 {
+    margin: 15px 0 5px;
+    color: #111827;
+  }
+  
+  .empty-state p {
+    margin: 0;
+    font-size: 0.9rem;
+  }
+  
+  .empty-icon {
+    color: #9ca3af;
+    margin-bottom: 10px;
   }
   </style>
   

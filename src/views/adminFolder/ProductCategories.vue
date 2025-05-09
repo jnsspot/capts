@@ -209,15 +209,18 @@
   @import url('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css');
   
   .dashboard-container {
-    display: flex;
-    min-height: 100vh;
-    background-color: #f5f7fa;
+  display: flex;
+  min-height: 100vh;
+  background-color: #f5f7fa;
+  margin-left: 260px; /* Same as sidebar width */
+  width: calc(100% - 260px); /* Calculate remaining width */
   }
   
   .main-content {
     flex: 1;
     padding: 2rem;
     position: relative;
+    width: 100%;
   }
   
   .header-section {
@@ -506,6 +509,20 @@
   }
   
   @media (max-width: 768px) {
+    dashboard-container {
+    margin-left: 0;
+    width: 100%;
+  }
+  
+  /* Optional: Make sidebar collapse on mobile */
+  .sidebar {
+    transform: translateX(-100%);
+    transition: transform 0.3s ease;
+  }
+  
+  .sidebar.open {
+    transform: translateX(0);
+  }
     .header-section {
       flex-direction: column;
       align-items: flex-start;

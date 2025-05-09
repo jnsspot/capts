@@ -5,8 +5,10 @@
     <div class="content-wrapper">
       <div class="price-monitoring">
         <div class="header">
-          
           <h1>Price Monitoring</h1>
+          <div class="notification-badge" v-if="pendingPriceUpdates.length > 0">
+            {{ pendingPriceUpdates.length }} Price Updates Pending
+          </div>
         </div>
 
         <div class="dashboard-container">
@@ -205,6 +207,9 @@
                           <button class="action-btn alert-btn" @click="togglePriceAlert(product)">
                             <i :class="product.hasAlert ? 'fas fa-bell' : 'far fa-bell'"></i>
                           </button>
+                          <button class="action-btn update-btn" @click="requestPriceUpdate(product)" v-if="needsPriceUpdate(product)">
+                            <i class="fas fa-sync-alt"></i>
+                          </button>
                           <button class="action-btn more-btn" @click="showMoreOptions(product)">
                             <i class="fas fa-ellipsis-v"></i>
                           </button>
@@ -268,6 +273,51 @@
                       <button class="dismiss-btn" @click="dismissAlert(index)">
                         Dismiss
                       </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Price Update Requests Section -->
+          <div class="price-updates-section">
+            <div class="section-header">
+              <h2>Price Update Requests</h2>
+              <button class="refresh-btn" @click="refreshPriceUpdates">
+                <i class="fas fa-sync-alt"></i> Refresh
+              </button>
+            </div>
+            
+            <div class="updates-container">
+              <div v-if="pendingPriceUpdates.length === 0" class="no-updates">
+                <i class="fas fa-check-circle"></i>
+                <p>No pending price updates</p>
+              </div>
+              
+              <div v-else class="update-items">
+                <div v-for="(update, index) in pendingPriceUpdates" :key="index" class="update-item">
+                  <div class="update-icon">
+                    <i class="fas fa-sync-alt"></i>
+                  </div>
+                  <div class="update-content">
+                    <div class="update-header">
+                      <h4>{{ update.productName }}</h4>
+                      <span class="update-date">{{ formatDate(update.requestDate) }}</span>
+                    </div>
+                    <p>Requested price update for {{ update.sellerName }}</p>
+                    <div class="update-footer">
+                      <span class="update-status" :class="getUpdateStatusClass(update.status)">
+                        {{ update.status }}
+                      </span>
+                      <div class="update-actions">
+                        <button class="remind-btn" @click="sendReminder(update)">
+                          <i class="fas fa-bell"></i> Remind
+                        </button>
+                        <button class="cancel-btn" @click="cancelPriceUpdate(update)">
+                          <i class="fas fa-times"></i> Cancel
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -445,6 +495,10 @@ export default {
     
     // Categories
     const categories = ref([]);
+    
+    // Add new data properties for price updates
+    const pendingPriceUpdates = ref([]);
+    const priceUpdateThreshold = 0.15; // 15% threshold for price updates
     
     // Fetch data from Firebase
     const fetchData = async () => {
@@ -1283,6 +1337,68 @@ export default {
       }
     };
     
+    // Add new methods for price updates
+    const needsPriceUpdate = (product) => {
+      if (!product.previousPrice) return false;
+      const priceChange = Math.abs((product.price - product.previousPrice) / product.previousPrice);
+      return priceChange > priceUpdateThreshold;
+    };
+    
+    const requestPriceUpdate = async (product) => {
+      const update = {
+        productId: product.productId,
+        productName: product.productName,
+        sellerId: product.sellerId,
+        sellerName: product.sellerName,
+        currentPrice: product.price,
+        previousPrice: product.previousPrice,
+        requestDate: new Date().toISOString(),
+        status: 'Pending',
+        reminders: 0
+      };
+      
+      pendingPriceUpdates.value.push(update);
+      
+      // In a real app, you would save this to Firebase
+      // await addDoc(collection(db, 'priceUpdates'), update);
+      
+      // Show notification
+      alert(`Price update requested for ${product.productName}`);
+    };
+    
+    const sendReminder = (update) => {
+      update.reminders += 1;
+      // In a real app, you would send an email/notification to the seller
+      alert(`Reminder sent to ${update.sellerName} for ${update.productName}`);
+    };
+    
+    const cancelPriceUpdate = (update) => {
+      const index = pendingPriceUpdates.value.findIndex(u => 
+        u.productId === update.productId && u.requestDate === update.requestDate
+      );
+      if (index !== -1) {
+        pendingPriceUpdates.value.splice(index, 1);
+      }
+    };
+    
+    const refreshPriceUpdates = () => {
+      // In a real app, you would fetch the latest updates from Firebase
+      alert('Price updates refreshed');
+    };
+    
+    const getUpdateStatusClass = (status) => {
+      switch (status.toLowerCase()) {
+        case 'pending':
+          return 'status-pending';
+        case 'completed':
+          return 'status-completed';
+        case 'cancelled':
+          return 'status-cancelled';
+        default:
+          return '';
+      }
+    };
+    
     // Watch for dark mode changes
     watch(() => isDarkMode.value, () => {
       renderChart();
@@ -1348,7 +1464,14 @@ export default {
       getStatusClass,
       getOrderStatusClass,
       getAlertTypeClass,
-      getAlertTypeIcon
+      getAlertTypeIcon,
+      pendingPriceUpdates,
+      needsPriceUpdate,
+      requestPriceUpdate,
+      sendReminder,
+      cancelPriceUpdate,
+      refreshPriceUpdates,
+      getUpdateStatusClass
     };
   }
 };
@@ -1817,6 +1940,11 @@ tr:hover {
 .alert-btn:hover {
   background: #fff8e1;
   color: #ff8f00;
+}
+
+.update-btn:hover {
+  background: #f57c00;
+  color: white;
 }
 
 .more-btn:hover {
@@ -2296,6 +2424,185 @@ tr:hover {
 }
 
 .dark-mode .secondary-btn {
+  background: #444;
+  color: #e0e0e0;
+}
+
+/* Price Update Section Styles */
+.price-updates-section {
+  background: white;
+  padding: 15px;
+  border-radius: 8px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+  margin-top: 20px;
+}
+
+.dark-mode .price-updates-section {
+  background: #333;
+}
+
+.notification-badge {
+  background: #f44336;
+  color: white;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  margin-left: 10px;
+}
+
+.update-btn {
+  background: #ff9800 !important;
+  color: white !important;
+}
+
+.update-btn:hover {
+  background: #f57c00 !important;
+}
+
+.no-updates {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 30px;
+  color: #999;
+}
+
+.no-updates i {
+  font-size: 40px;
+  margin-bottom: 10px;
+  color: #4caf50;
+}
+
+.update-items {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.update-item {
+  display: flex;
+  gap: 15px;
+  padding: 15px;
+  background: #f9f9f9;
+  border-radius: 8px;
+}
+
+.dark-mode .update-item {
+  background: #3a3a3a;
+}
+
+.update-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #fff8e1;
+  color: #ff8f00;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.update-content {
+  flex: 1;
+}
+
+.update-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 5px;
+}
+
+.update-header h4 {
+  margin: 0;
+  color: #333;
+  font-size: 16px;
+}
+
+.dark-mode .update-header h4 {
+  color: #e0e0e0;
+}
+
+.update-date {
+  color: #999;
+  font-size: 12px;
+}
+
+.update-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 10px;
+}
+
+.update-status {
+  font-size: 12px;
+  padding: 3px 8px;
+  border-radius: 12px;
+}
+
+.status-pending {
+  background: #fff8e1;
+  color: #ff8f00;
+}
+
+.status-completed {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.status-cancelled {
+  background: #ffebee;
+  color: #c62828;
+}
+
+.update-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.remind-btn, .cancel-btn {
+  background: none;
+  border: none;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.remind-btn {
+  color: #1976d2;
+}
+
+.cancel-btn {
+  color: #f44336;
+}
+
+.remind-btn:hover {
+  background: #e3f2fd;
+}
+
+.cancel-btn:hover {
+  background: #ffebee;
+}
+
+.refresh-btn {
+  background: #f0f0f0;
+  border: none;
+  padding: 8px 15px;
+  border-radius: 4px;
+  cursor: pointer;
+  color: #666;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.dark-mode .refresh-btn {
   background: #444;
   color: #e0e0e0;
 }

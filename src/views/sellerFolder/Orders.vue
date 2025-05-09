@@ -58,41 +58,41 @@
 
       <div class="content-wrapper">
         <div class="actions-bar">
-        <div class="search-and-filter">
-          <div class="search-box">
-            <i class="i-lucide-search search-icon"></i>
-            <input type="text" placeholder="Search orders..." v-model="searchQuery" />
-            <button v-if="searchQuery" class="clear-search" @click="searchQuery = ''">
-              <i class="i-lucide-x"></i>
-            </button>
-          </div>
-          
-          <div class="date-filter-container">
-            <div class="date-filter">
-              <i class="i-lucide-calendar"></i>
-              <input 
-                type="date" 
-                v-model="selectedDate" 
-                @change="filterByDate"
-                class="minimal-date-input"
-              />
-              <input 
-                type="time" 
-                v-model="selectedTime" 
-                @change="filterByDate" 
-                v-if="selectedDate"
-                class="minimal-time-input"
-              />
-              <button 
-                v-if="selectedDate || selectedTime" 
-                @click="resetDateFilter" 
-                class="minimal-reset-btn"
-              >
+          <div class="search-and-filter">
+            <div class="search-box">
+              <i class="i-lucide-search search-icon"></i>
+              <input type="text" placeholder="Search orders..." v-model="searchQuery" />
+              <button v-if="searchQuery" class="clear-search" @click="searchQuery = ''">
                 <i class="i-lucide-x"></i>
               </button>
             </div>
+            
+            <div class="date-filter-container">
+              <div class="date-filter">
+                <i class="i-lucide-calendar"></i>
+                <input 
+                  type="date" 
+                  v-model="selectedDate" 
+                  @change="filterByDate"
+                  class="minimal-date-input"
+                />
+                <input 
+                  type="time" 
+                  v-model="selectedTime" 
+                  @change="filterByDate" 
+                  v-if="selectedDate"
+                  class="minimal-time-input"
+                />
+                <button 
+                  v-if="selectedDate || selectedTime" 
+                  @click="resetDateFilter" 
+                  class="minimal-reset-btn"
+                >
+                  <i class="i-lucide-x"></i>
+                </button>
+              </div>
+            </div>
           </div>
-        </div>
           <div class="filter-actions">
             <div class="filter-dropdown">
               <button class="filter-btn" @click="toggleFilterDropdown">
@@ -131,13 +131,12 @@
           </thead>
           <tbody>
             <tr v-for="(order, index) in paginatedOrders" :key="order.id">
-              <td class="order-id" v-if="order.orderCode">#{{ order.orderCode }}</td>
-              <td class="order-id" v-else>N/A</td>
+              <td class="order-id">#{{ order.orderCode || 'N/A' }}</td>
               <td>{{ order.username }}</td>
               <td>
                 <div class="location-cell">
                   <i class="i-lucide-map-pin location-icon"></i>
-                  <span>{{ order.Location }}</span>
+                  <span>{{ getAddressDisplay(order.Location) }}</span>
                 </div>
               </td>
               <td>{{ formatDateTime(order.timestamp) }}</td>
@@ -211,7 +210,9 @@
               
               <div class="info-group">
                 <h3>Delivery Information</h3>
-                <p><strong>Address:</strong> {{ selectedOrder.Location }}</p>
+                <p><strong>Address:</strong> {{ selectedOrder.Location?.address || 'N/A' }}</p>
+                <p v-if="selectedOrder.Location?.name"><strong>Name/Alias:</strong> {{ selectedOrder.Location.name }}</p>
+                <p v-if="selectedOrder.Location?.locationNotes"><strong>Instruction:</strong> {{ selectedOrder.Location.locationNotes }}</p>
               </div>
               
               <div class="info-group">
@@ -294,6 +295,13 @@ const selectedDate = ref('');
 const selectedTime = ref('');
 const currentSellerId = ref('');
 
+// Helper function to get display address
+const getAddressDisplay = (location) => {
+  if (!location) return 'N/A';
+  if (typeof location === 'string') return location;
+  return location.address || 'N/A';
+};
+
 // Initialize with empty orders
 const initializeOrders = async () => {
   try {
@@ -308,7 +316,7 @@ const initializeOrders = async () => {
     const querySnapshot = await getDocs(collection(db, 'orders'));
     orders.value = querySnapshot.docs.map(doc => {
       const data = doc.data();
-      let timestamp = data.createdAt || data.timestamp; // Prefer createdAt if it exists
+      let timestamp = data.createdAt || data.timestamp;
       
       // Convert to Date if it's a Firestore Timestamp
       if (timestamp && typeof timestamp.toDate === 'function') {
@@ -323,14 +331,19 @@ const initializeOrders = async () => {
         timestamp = new Date();
       }
       
+      // Ensure Location is properly structured
+      const location = typeof data.Location === 'string' 
+        ? { address: data.Location } 
+        : (data.Location || {});
+      
       return {
         id: doc.id,
         ...data,
         username: data.username || '',
         status: data.status || 'Pending',
-        Location: data.Location || '',
+        Location: location,
         totalPrice: data.totalPrice || 0,
-        timestamp: timestamp, // Now using createdAt if available
+        timestamp: timestamp,
         sellerId: data.sellerId || '',
         orderCode: data.orderCode || ''
       };
@@ -338,7 +351,7 @@ const initializeOrders = async () => {
   } catch (error) {
     console.error('Error fetching orders:', error);
   }
-};
+};  
 
 onMounted(() => {
   initializeOrders();
@@ -499,7 +512,12 @@ const formatDateTime = (timestamp) => {
 
 // Order detail modal functions
 const viewOrderDetails = (order) => {
-  selectedOrder.value = { ...order };
+  selectedOrder.value = { 
+    ...order,
+    Location: typeof order.Location === 'string' 
+      ? { address: order.Location } 
+      : (order.Location || {})
+  };
   newStatus.value = order.status;
   showOrderModal.value = true;
 };
@@ -541,6 +559,30 @@ const createNewOrder = () => {
 </script>
 
 <style scoped>
+.info-group p {
+  margin: 8px 0;
+  line-height: 1.5;
+}
+
+.info-group strong {
+  display: inline-block;
+  min-width: 100px;
+  color: #4b5563;
+}
+.location-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}
+
+.location-icon {
+  color: #2e5c31;
+  flex-shrink: 0;
+}
 .dashboard-container {
   display: flex;
   min-height: 100vh;

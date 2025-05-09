@@ -6,11 +6,11 @@
         <div class="header">
           <h1>Messages</h1>
           <div class="header-actions">
-            <button class="action-button">
+            <button class="action-button" @click="toggleFilter">
               <Filter size="18" />
               <span>Filter</span>
             </button>
-            <button class="action-button">
+            <button class="action-button" @click="toggleSearch">
               <Search size="18" />
               <span>Search</span>
             </button>
@@ -37,16 +37,28 @@
               </button>
             </div>
             
-            <div class="search-box">
+            <div v-if="showSearch" class="search-box">
               <Search size="16" class="search-icon" />
               <input 
                 type="text" 
                 placeholder="Search conversations..." 
                 v-model="searchQuery"
+                @input="handleSearch"
               />
+              <button class="close-search" @click="closeSearch">×</button>
             </div>
             
-            <div class="conversations-list">
+            <div v-if="loadingConversations" class="loading-state">
+              <div class="loading-spinner"></div>
+              <p>Loading conversations...</p>
+            </div>
+            
+            <div v-else-if="filteredConversations.length === 0" class="empty-state">
+              <MessageSquare size="40" />
+              <p>No conversations found</p>
+            </div>
+            
+            <div v-else class="conversations-list">
               <div 
                 v-for="conversation in filteredConversations" 
                 :key="conversation.id"
@@ -68,16 +80,14 @@
                     <span v-if="conversation.orderId" class="order-badge">
                       Order #{{ conversation.orderId }}
                     </span>
+                    <span v-if="conversation.isTyping" class="typing-indicator">
+                      Typing...
+                    </span>
                   </div>
                 </div>
                 <div class="conversation-indicators">
                   <div v-if="conversation.unreadCount > 0" class="unread-badge">{{ conversation.unreadCount }}</div>
                 </div>
-              </div>
-              
-              <div v-if="filteredConversations.length === 0" class="empty-state">
-                <MessageSquare size="40" />
-                <p>No conversations found</p>
               </div>
             </div>
           </div>
@@ -93,7 +103,7 @@
                   <h3>{{ selectedConversation.customerName }}</h3>
                   <div class="chat-user-meta">
                     <span v-if="selectedConversation.customerOnline" class="online-status">Online</span>
-                    <span v-else class="offline-status">Last seen recently</span>
+                    <span v-else class="offline-status">Last seen {{ formatLastSeen(selectedConversation.lastSeen) }}</span>
                     <span v-if="selectedConversation.orderId" class="order-number">
                       Order #{{ selectedConversation.orderId }}
                     </span>
@@ -101,70 +111,79 @@
                 </div>
               </div>
               <div class="chat-actions">
-                <button class="icon-button">
+                <button class="icon-button" @click="toggleCall">
                   <Phone size="18" />
                 </button>
-                <button class="icon-button">
-                  <UserPlus size="18" />
-                </button>
-                <button class="icon-button">
+                <button class="icon-button" @click="toggleMoreOptions">
                   <MoreVertical size="18" />
                 </button>
               </div>
             </div>
             
             <div class="chat-messages" ref="messagesContainer">
-              <div class="date-separator">
-                <span>{{ currentDate }}</span>
+              <div v-if="loadingMessages" class="loading-messages">
+                <div class="loading-spinner"></div>
+                <p>Loading messages...</p>
               </div>
               
-              <div 
-                v-for="(message, index) in chatMessages" 
-                :key="index"
-                class="chat-message"
-                :class="{ 
-                  'outgoing': message.senderType === 'seller',
-                  'incoming': message.senderType === 'customer',
-                  'system': message.senderType === 'system'
-                }"
-              >
-                <div v-if="message.senderType === 'system'" class="system-message">
-                  {{ message.text }}
+              <div v-else>
+                <div class="date-separator">
+                  <span>{{ currentDate }}</span>
                 </div>
-                <template v-else>
-                  <div class="message-bubble">
-                    <div v-if="message.productInfo" class="product-preview">
-                      <img :src="message.productInfo.image" :alt="message.productInfo.name">
-                      <div class="product-details">
-                        <h4>{{ message.productInfo.name }}</h4>
-                        <p>₱{{ message.productInfo.price }}</p>
+                
+                <div 
+                  v-for="(message, index) in chatMessages" 
+                  :key="message.id || index"
+                  class="chat-message"
+                  :class="{ 
+                    'outgoing': message.senderType === 'seller',
+                    'incoming': message.senderType === 'customer'
+                  }"
+                >
+                  <div v-if="message.senderType === 'system'" class="system-message">
+                    {{ message.text }}
+                  </div>
+                  <template v-else>
+                    <div class="message-bubble">
+                      <p>{{ message.text }}</p>
+                      <div v-if="message.productInfo" class="product-preview">
+                        <img :src="message.productInfo.image" :alt="message.productInfo.name">
+                        <div class="product-details">
+                          <h4>{{ message.productInfo.name }}</h4>
+                          <p>₱{{ message.productInfo.price }}</p>
+                        </div>
+                      </div>
+                      <div v-if="message.orderInfo" class="order-preview">
+                        <div class="order-header">
+                          <ShoppingBag size="16" />
+                          <span>Order #{{ message.orderInfo.id }}</span>
+                        </div>
+                        <div class="order-details">
+                          <p>{{ message.orderInfo.items }} items • ₱{{ message.orderInfo.total }}</p>
+                          <span :class="'order-status-' + message.orderInfo.status.toLowerCase()">
+                            {{ message.orderInfo.status }}
+                          </span>
+                        </div>
                       </div>
                     </div>
-                    <div v-if="message.orderInfo" class="order-preview">
-                      <div class="order-header">
-                        <ShoppingBag size="16" />
-                        <span>Order #{{ message.orderInfo.id }}</span>
-                      </div>
-                      <div class="order-details">
-                        <p>{{ message.orderInfo.items }} items • ₱{{ message.orderInfo.total }}</p>
-                        <span :class="'order-status-' + message.orderInfo.status.toLowerCase()">
-                          {{ message.orderInfo.status }}
-                        </span>
-                      </div>
+                    <div class="message-time">
+                      {{ formatMessageTime(message.timestamp) }}
+                      <CheckCheck 
+                        v-if="message.senderType === 'seller'" 
+                        size="14" 
+                        class="message-status" 
+                        :class="{ 'read': message.read }" 
+                      />
                     </div>
-                    <p>{{ message.text }}</p>
-                  </div>
-                  <div class="message-time">
-                    {{ formatMessageTime(message.timestamp) }}
-                    <CheckCheck 
-                      v-if="message.senderType === 'seller'" 
-                      size="14" 
-                      class="message-status" 
-                      :class="{ 'read': message.read }" 
-                    />
-                  </div>
-                </template>
+                  </template>
+                </div>
               </div>
+            </div>
+            
+            <div v-if="selectedConversation.isTyping" class="typing-indicator">
+              <span class="dot"></span>
+              <span class="dot"></span>
+              <span class="dot"></span>
             </div>
             
             <div class="quick-replies" v-if="quickReplies.length > 0">
@@ -180,13 +199,13 @@
             
             <div class="chat-input">
               <div class="input-actions">
-                <button class="icon-button">
+                <button class="icon-button" @click="toggleAttachment">
                   <Paperclip size="18" />
                 </button>
-                <button class="icon-button">
+                <button class="icon-button" @click="toggleImageUpload">
                   <Image size="18" />
                 </button>
-                <button class="icon-button">
+                <button class="icon-button" @click="toggleProductTag">
                   <Tag size="18" />
                 </button>
               </div>
@@ -195,10 +214,15 @@
                   v-model="newMessage" 
                   placeholder="Type a message..." 
                   @keydown.enter.prevent="sendMessage"
+                  @input="handleTyping"
                   rows="1"
                   ref="messageInput"
                 ></textarea>
-                <button class="send-button" @click="sendMessage" :disabled="!newMessage.trim()">
+                <button 
+                  class="send-button" 
+                  @click="sendMessage" 
+                  :disabled="!newMessage.trim() || sendingMessage"
+                >
                   <Send size="18" />
                 </button>
               </div>
@@ -216,7 +240,6 @@
       </div>
     </div>
   </template>
-  
   <script setup>
   import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue';
   import { 
@@ -235,7 +258,20 @@
   } from 'lucide-vue-next';
   import Sidebar from '@/components/Sidebar.vue';
   import { db } from '@/firebase/firebaseConfig';
-  import { collection, query, where, orderBy, onSnapshot, doc, addDoc, updateDoc, serverTimestamp, getDoc } from 'firebase/firestore';
+  import { 
+    collection, 
+    query, 
+    where, 
+    orderBy, 
+    onSnapshot, 
+    doc, 
+    addDoc, 
+    updateDoc, 
+    serverTimestamp, 
+    getDoc,
+    writeBatch,
+    deleteDoc
+  } from 'firebase/firestore';
   import { getAuth } from 'firebase/auth';
   
   // Firebase auth
@@ -252,10 +288,17 @@
   const messageInput = ref(null);
   const conversations = ref([]);
   const chatMessages = ref([]);
+  const loadingConversations = ref(true);
+  const loadingMessages = ref(false);
+  const sendingMessage = ref(false);
+  const showSearch = ref(false);
+  const typingTimeout = ref(null);
   
   // Unsubscribe functions
   let conversationsUnsubscribe = null;
   let messagesUnsubscribe = null;
+  let globalConversationsListener = null;
+  let typingListener = null;
   
   // Tabs
   const tabs = [
@@ -303,6 +346,19 @@
     return timestamp.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
   
+  // Format last seen
+  const formatLastSeen = (timestamp) => {
+    if (!timestamp) return 'recently';
+    const date = timestamp.toDate();
+    const now = new Date();
+    const diffInMinutes = Math.floor((now - date) / (1000 * 60));
+    
+    if (diffInMinutes < 1) return 'just now';
+    if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
+    if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)}h ago`;
+    return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  };
+  
   // Filtered conversations based on active tab and search query
   const filteredConversations = computed(() => {
     let filtered = conversations.value;
@@ -310,11 +366,10 @@
     // Filter by tab
     if (activeTab.value !== 'all') {
       if (activeTab.value === 'unread') {
-        filtered = filtered.filter(conv => conv.unreadCount > 0);
+        filtered = filtered.filter(conv => conv.hasUnread);
       } else if (activeTab.value === 'orders') {
         filtered = filtered.filter(conv => conv.orderId);
       } else if (activeTab.value === 'support') {
-        // You might need to adjust this based on how you identify support conversations
         filtered = filtered.filter(conv => conv.isSupport);
       }
     }
@@ -339,47 +394,81 @@
       orderBy('lastMessageTime', 'desc')
     );
     
-    conversationsUnsubscribe = onSnapshot(q, (snapshot) => {
-      conversations.value = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        customerId: doc.data().participants.find(id => id !== sellerId)
-      }));
+    conversationsUnsubscribe = onSnapshot(q, async (snapshot) => {
+      const convs = [];
       
-      // Fetch customer details for each conversation
-      conversations.value.forEach(async (conv) => {
-        if (!conv.customerName) {
-          const customerDoc = await getDoc(doc(db, 'users', conv.customerId));
-          if (customerDoc.exists()) {
-            const customerData = customerDoc.data();
-            conv.customerName = customerData.displayName || 'Customer';
-            conv.customerAvatar = customerData.photoURL || 'https://randomuser.me/api/portraits/lego/1.jpg';
-            conv.customerOnline = customerData.isOnline || false;
-          }
+      for (const docSnapshot of snapshot.docs) {
+        const data = docSnapshot.data();
+        const customerId = data.participants.find(id => id !== sellerId);
+        
+        // Get customer details
+        const customerDocRef = doc(db, 'users', customerId);
+        const customerDoc = await getDoc(customerDocRef);
+        
+        if (customerDoc.exists()) {
+          const customerData = customerDoc.data();
+          const fullName = `${customerData.firstName || ''} ${customerData.lastName || ''}`.trim();
+          
+          convs.push({
+            id: docSnapshot.id,
+            customerId: customerId,
+            customerName: fullName || 'Customer',
+            customerAvatar: customerData.photoURL || "https://randomuser.me/api/portraits/lego/1.jpg",
+            customerOnline: customerData.isOnline || false,
+            lastMessage: data.lastMessage,
+            lastMessageTime: data.lastMessageTime,
+            unreadCount: data.unreadCount || 0,
+            type: 'customer',
+            lastSeen: customerData.lastSeen
+          });
         }
-      });
+      }
+      
+      conversations.value = convs;
+      loadingConversations.value = false;
     });
   };
   
- // In the selectConversation function:
- const selectConversation = async (conversation) => {
-  selectedConversationId.value = conversation.id;
-  selectedConversation.value = conversation;
-  
-  // Mark as read if needed
-  if (conversation.unreadCount > 0 && conversation.lastMessageSender === 'customer') {
-    await updateDoc(doc(db, 'conversations', conversation.id), {
-      unreadCount: 0
-    });
-  }
-  
-  // Load messages for this conversation
-  loadMessages(conversation.id);
-};
+  // Select conversation and mark as read
+  const selectConversation = async (conversation) => {
+    selectedConversationId.value = conversation.id;
     
-
+    // Ensure we have all customer data before setting as selected
+    const customerDoc = await getDoc(doc(db, 'users', conversation.customerId));
+    if (customerDoc.exists()) {
+      const customerData = customerDoc.data();
+      const fullName = `${customerData.firstName || ''} ${customerData.lastName || ''}`.trim();
+      
+      selectedConversation.value = {
+        ...conversation,
+        customerName: fullName || 'Customer',
+        customerAvatar: customerData.photoURL || 'https://randomuser.me/api/portraits/lego/1.jpg',
+        customerOnline: customerData.isOnline || false,
+        lastSeen: customerData.lastSeen
+      };
+    } else {
+      selectedConversation.value = conversation;
+    }
+    
+    // Mark as read if needed
+    if (conversation.lastMessageSender === 'customer') {
+      await updateDoc(doc(db, 'conversations', conversation.id), {
+        unreadCount: 0,
+        lastMessageSeen: serverTimestamp()
+      });
+    }
+    
+    // Load messages for this conversation
+    loadMessages(conversation.id);
+    
+    // Set up typing indicator listener
+    setupTypingListener(conversation.id);
+  };
+  
   // Load messages for a conversation
   const loadMessages = (conversationId) => {
+    loadingMessages.value = true;
+    
     if (messagesUnsubscribe) {
       messagesUnsubscribe();
     }
@@ -390,44 +479,121 @@
     );
     
     messagesUnsubscribe = onSnapshot(q, (snapshot) => {
-      chatMessages.value = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
+      chatMessages.value = snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          senderType: data.senderId === sellerId ? 'seller' : 'customer'
+        };
+      });
       
-      // Scroll to bottom
+      // Mark messages as read when loaded
+      if (snapshot.docs.length > 0) {
+        const unreadMessages = snapshot.docs
+          .filter(doc => doc.data().senderId !== sellerId && !doc.data().read);
+        
+        if (unreadMessages.length > 0) {
+          const batch = writeBatch(db);
+          unreadMessages.forEach(msg => {
+            const msgRef = doc(db, 'conversations', conversationId, 'messages', msg.id);
+            batch.update(msgRef, { read: true });
+          });
+          batch.commit();
+        }
+      }
+      
+      loadingMessages.value = false;
       scrollToBottom();
     });
   };
   
-  // Send a message
-  const sendMessage = async () => {
-  if (!newMessage.value.trim() || !selectedConversationId.value) return;
-  
-  const message = {
-    senderId: sellerId,
-    senderType: 'seller',
-    text: newMessage.value,
-    timestamp: serverTimestamp(),
-    read: false
+  // Set up typing indicator listener
+  const setupTypingListener = (conversationId) => {
+    if (typingListener) {
+      typingListener();
+    }
+    
+    const typingRef = doc(db, 'conversations', conversationId, 'typing', 'status');
+    typingListener = onSnapshot(typingRef, (doc) => {
+      if (doc.exists() && doc.data().customerTyping) {
+        selectedConversation.value.isTyping = true;
+      } else {
+        selectedConversation.value.isTyping = false;
+      }
+    });
   };
   
-  // Add message to Firestore
-  await addDoc(
-    collection(db, 'conversations', selectedConversationId.value, 'messages'),
-    message
-  );
+  // Handle typing indicator
+  const handleTyping = () => {
+    if (!selectedConversationId.value) return;
+    
+    // Clear existing timeout
+    if (typingTimeout.value) {
+      clearTimeout(typingTimeout.value);
+    }
+    
+    // Set new timeout
+    typingTimeout.value = setTimeout(() => {
+      updateTypingStatus(false);
+    }, 3000);
+    
+    // Update typing status
+    updateTypingStatus(true);
+  };
   
-  // Update conversation last message
-  await updateDoc(doc(db, 'conversations', selectedConversationId.value), {
-    lastMessage: newMessage.value,
-    lastMessageTime: serverTimestamp(),
-    lastMessageSender: 'seller',
-    unreadCount: 1 // Customer has unread message
-  });
+  // Update typing status
+  const updateTypingStatus = async (isTyping) => {
+    if (!selectedConversationId.value) return;
+    
+    try {
+      await updateDoc(doc(db, 'conversations', selectedConversationId.value, 'typing', 'status'), {
+        sellerTyping: isTyping,
+        timestamp: serverTimestamp()
+      });
+    } catch (error) {
+      console.error('Error updating typing status:', error);
+    }
+  };
   
-  newMessage.value = '';
-};
+  // Send a message
+  const sendMessage = async () => {
+    if (!newMessage.value.trim() || !selectedConversationId.value || sendingMessage.value) return;
+    
+    sendingMessage.value = true;
+    const message = {
+      senderId: sellerId,
+      senderType: 'seller',
+      text: newMessage.value,
+      timestamp: serverTimestamp(),
+      read: false
+    };
+    
+    try {
+      // Add message to Firestore
+      await addDoc(
+        collection(db, 'conversations', selectedConversationId.value, 'messages'),
+        message
+      );
+      
+      // Update conversation last message
+      await updateDoc(doc(db, 'conversations', selectedConversationId.value), {
+        lastMessage: newMessage.value,
+        lastMessageTime: serverTimestamp(),
+        lastMessageSender: 'seller',
+        unreadCount: 0
+      });
+      
+      // Clear typing status
+      await updateTypingStatus(false);
+      
+      newMessage.value = '';
+    } catch (error) {
+      console.error('Error sending message:', error);
+    } finally {
+      sendingMessage.value = false;
+    }
+  };
   
   // Send a quick reply
   const sendQuickReply = (reply) => {
@@ -452,6 +618,55 @@
     }
   };
   
+  // Toggle search
+  const toggleSearch = () => {
+    showSearch.value = !showSearch.value;
+    if (!showSearch.value) {
+      searchQuery.value = '';
+    }
+  };
+  
+  // Close search
+  const closeSearch = () => {
+    showSearch.value = false;
+    searchQuery.value = '';
+  };
+  
+  // Handle search
+  const handleSearch = () => {
+    // Search is handled by the computed property
+  };
+  
+  // Toggle filter
+  const toggleFilter = () => {
+    // Implement filter functionality
+  };
+  
+  // Toggle call
+  const toggleCall = () => {
+    // Implement call functionality
+  };
+  
+  // Toggle more options
+  const toggleMoreOptions = () => {
+    // Implement more options functionality
+  };
+  
+  // Toggle attachment
+  const toggleAttachment = () => {
+    // Implement attachment functionality
+  };
+  
+  // Toggle image upload
+  const toggleImageUpload = () => {
+    // Implement image upload functionality
+  };
+  
+  // Toggle product tag
+  const toggleProductTag = () => {
+    // Implement product tag functionality
+  };
+  
   // Watch for changes to newMessage to resize textarea
   watch(newMessage, () => {
     resizeTextarea();
@@ -461,6 +676,26 @@
   onMounted(() => {
     if (sellerId) {
       fetchConversations();
+      
+      // Global listener for new messages in any conversation
+      const conversationsQuery = query(
+        collection(db, 'conversations'),
+        where('participants', 'array-contains', sellerId)
+      );
+      
+      globalConversationsListener = onSnapshot(conversationsQuery, (snapshot) => {
+        snapshot.docChanges().forEach((change) => {
+          if (change.type === 'modified') {
+            const conversation = change.doc.data();
+            if (conversation.lastMessageSender === 'customer' && 
+                conversation.unreadCount > 0 &&
+                change.doc.id !== selectedConversationId.value) {
+              // You can add a notification here
+              console.log('New message in conversation:', change.doc.id);
+            }
+          }
+        });
+      });
     }
     scrollToBottom();
   });
@@ -472,6 +707,15 @@
     }
     if (messagesUnsubscribe) {
       messagesUnsubscribe();
+    }
+    if (globalConversationsListener) {
+      globalConversationsListener();
+    }
+    if (typingListener) {
+      typingListener();
+    }
+    if (typingTimeout.value) {
+      clearTimeout(typingTimeout.value);
     }
   });
   </script>
@@ -1279,5 +1523,112 @@
   
   :root.dark .empty-chat-content h2 {
     color: #ccc;
+  }
+  
+  /* Add new styles for typing indicator */
+  .typing-indicator {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    color: #666;
+    margin-top: 4px;
+  }
+  
+  .typing-indicator .dot {
+    width: 4px;
+    height: 4px;
+    background-color: #666;
+    border-radius: 50%;
+    animation: typing 1s infinite ease-in-out;
+  }
+  
+  .typing-indicator .dot:nth-child(2) {
+    animation-delay: 0.2s;
+  }
+  
+  .typing-indicator .dot:nth-child(3) {
+    animation-delay: 0.4s;
+  }
+  
+  @keyframes typing {
+    0%, 100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-4px);
+    }
+  }
+  
+  /* Add styles for loading states */
+  .loading-spinner {
+    width: 24px;
+    height: 24px;
+    border: 3px solid #f3f3f3;
+    border-top: 3px solid #2e5c31;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin: 0 auto 10px;
+  }
+  
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+  
+  .loading-state,
+  .loading-messages {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    color: #666;
+  }
+  
+  /* Add styles for search */
+  .close-search {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    font-size: 20px;
+    color: #666;
+    cursor: pointer;
+    padding: 0;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+  }
+  
+  .close-search:hover {
+    background-color: #f0f0f0;
+  }
+  
+  /* Dark mode support for new elements */
+  :root.dark .typing-indicator {
+    color: #ccc;
+  }
+  
+  :root.dark .typing-indicator .dot {
+    background-color: #ccc;
+  }
+  
+  :root.dark .loading-spinner {
+    border-color: #333;
+    border-top-color: #4a8f4d;
+  }
+  
+  :root.dark .close-search {
+    color: #ccc;
+  }
+  
+  :root.dark .close-search:hover {
+    background-color: #333;
   }
   </style>

@@ -91,15 +91,16 @@
           @click="openChat(conversation)"
         >
           <div class="message-avatar">
-            <img :src="conversation.otherUserPhoto" :alt="conversation.otherUserName" />
-            <div class="status-dot" :class="{ online: conversation.otherUserOnline }"></div>
+            <img :src="conversation.sellerPhoto" :alt="conversation.sellerName" />
+            <div class="status-dot" :class="{ online: conversation.sellerOnline }"></div>
           </div>
           <div class="message-content">
             <div class="message-header">
-              <h3>{{ conversation.otherUserName }}</h3>
+              <h3>{{ conversation.sellerName }}</h3>
               <span class="message-time">{{ formatConversationTime(conversation.lastMessageTime) }}</span>
             </div>
             <p class="message-preview">{{ conversation.lastMessage }}</p>
+            <p v-if="conversation.sellerFarm" class="farm-name">{{ conversation.sellerFarm }}</p>
           </div>
           <div class="message-indicators">
             <div v-if="conversation.unreadCount > 0" class="unread-badge">
@@ -168,6 +169,11 @@
         </button>
       </div>
     </div>
+
+    <div v-if="showNotification" class="notification">
+      <Bell size="20" />
+      <span>{{ notificationMessage }}</span>
+    </div>
   </div>
 </template>
 
@@ -180,6 +186,7 @@ import {
   MoreVertical,
   Paperclip,
   Send,
+  Bell
 } from "lucide-vue-next";
 import { 
   ref, 
@@ -213,6 +220,7 @@ export default {
     MoreVertical,
     Paperclip,
     Send,
+    Bell
   },
   setup() {
     const activeTab = ref("all");
@@ -235,6 +243,11 @@ export default {
     
     let conversationsUnsubscribe = null;
     let messagesUnsubscribe = null;
+
+    // Add notification state
+    const notifications = ref([]);
+    const showNotification = ref(false);
+    const notificationMessage = ref('');
 
     const filteredConversations = computed(() => {
       return conversations.value.filter(conv => {
@@ -285,26 +298,37 @@ export default {
         
         for (const doc of snapshot.docs) {
           const data = doc.data();
-          const otherUserId = data.participants.find(id => id !== currentUserId);
+          const sellerId = data.participants.find(id => id !== currentUserId);
           
-          // Get other user's details
-          let otherUser = { firstName: "", lastName: "", photoURL: "", isOnline: false };
+          // Get seller details
+          let sellerData = {};
           try {
-            const userDoc = await getDoc(doc(db, "users", otherUserId));
+            // First try to get from users collection
+            const userDoc = await getDoc(doc(db, "users", sellerId));
             if (userDoc.exists()) {
-              otherUser = userDoc.data();
+              sellerData = userDoc.data();
+            }
+            
+            // Then get additional seller data if available
+            const sellerDoc = await getDoc(doc(db, "sellers", sellerId));
+            if (sellerDoc.exists()) {
+              sellerData = { ...sellerData, ...sellerDoc.data() };
             }
           } catch (error) {
-            console.error("Error fetching user data:", error);
+            console.error("Error fetching seller data:", error);
           }
+          
+          const fullName = `${sellerData.firstName || ''} ${sellerData.lastName || ''}`.trim();
+          const farmName = sellerData.farmName || '';
           
           convs.push({
             id: doc.id,
             conversationId: doc.id,
-            otherUserId,
-            otherUserName: `${otherUser.firstName || ''} ${otherUser.lastName || ''}`.trim() || 'User',
-            otherUserPhoto: otherUser.photoURL || "https://randomuser.me/api/portraits/lego/1.jpg",
-            otherUserOnline: otherUser.isOnline || false,
+            sellerId,
+            sellerName: fullName || 'Seller',
+            sellerFarm: farmName,
+            sellerPhoto: sellerData.photoURL || "https://randomuser.me/api/portraits/lego/1.jpg",
+            sellerOnline: sellerData.isOnline || false,
             lastMessage: data.lastMessage,
             lastMessageTime: data.lastMessageTime,
             lastMessageSender: data.lastMessageSender,
@@ -393,7 +417,6 @@ export default {
       }
     };
 
-    // Search methods
     const toggleSearch = () => {
       showSearch.value = !showSearch.value;
       if (!showSearch.value) {
@@ -408,7 +431,6 @@ export default {
       searchResults.value = [];
     };
 
-   
     const handleSearch = async () => {
       if (!searchQuery.value.trim()) {
         searchResults.value = [];
@@ -419,30 +441,31 @@ export default {
       const queryText = searchQuery.value.toLowerCase();
 
       try {
-        // Get all users with role 'seller' where userId field exists
+        // Get all users with role 'seller'
         const usersQuery = query(
           collection(db, "users"),
-          where("role", "==", "seller"),
-          where("userId", "!=", null)
+          where("role", "==", "seller")
         );
         const usersSnapshot = await getDocs(usersQuery);
         
         const results = [];
         
-        // Check each seller against search query
         for (const userDoc of usersSnapshot.docs) {
           const userData = userDoc.data();
-          const userId = userData.userId;
+          const userId = userData.userId || userDoc.id; // Fallback to doc ID if userId doesn't exist
           
-          // Combine firstName and lastName for full name search
-          const fullName = `${userData.firstName || ''} ${userData.lastName || ''}`.trim().toLowerCase();
+          // Create searchable name combinations
+          const firstName = (userData.firstName || '').toLowerCase();
+          const lastName = (userData.lastName || '').toLowerCase();
+          const fullName = `${firstName} ${lastName}`.trim();
           
-          // Check if firstName, lastName, or fullName matches
-          const firstNameMatch = userData.firstName?.toLowerCase().includes(queryText);
-          const lastNameMatch = userData.lastName?.toLowerCase().includes(queryText);
-          const fullNameMatch = fullName.includes(queryText);
+          // Check name matches (partial matches included)
+          const nameMatches = 
+            firstName.includes(queryText) ||
+            lastName.includes(queryText) ||
+            fullName.includes(queryText);
           
-          // Get seller data from sellers collection using userId
+          // Get seller data
           let sellerData = {};
           try {
             const sellerDoc = await getDoc(doc(db, "sellers", userId));
@@ -453,17 +476,20 @@ export default {
             console.error("Error fetching seller data:", error);
           }
           
-          // Check if farmName or accountName matches
-          const farmMatch = sellerData.farmName?.toLowerCase().includes(queryText);
-          const accountMatch = sellerData.accountName?.toLowerCase().includes(queryText);
+          // Check farm/account matches
+          const farmName = (sellerData.farmName || '').toLowerCase();
+          const accountName = (sellerData.accountName || '').toLowerCase();
           
-          if (firstNameMatch || lastNameMatch || fullNameMatch || farmMatch || accountMatch) {
+          const sellerMatches = 
+            farmName.includes(queryText) || 
+            accountName.includes(queryText);
+          
+          if (nameMatches || sellerMatches) {
             results.push({
               id: userId,
               userId: userId,
               firstName: userData.firstName,
               lastName: userData.lastName,
-              fullName: fullName,
               photoURL: userData.photoURL || "https://randomuser.me/api/portraits/lego/1.jpg",
               farmName: sellerData.farmName,
               accountName: sellerData.accountName,
@@ -473,6 +499,9 @@ export default {
         }
         
         searchResults.value = results;
+        
+        // DEBUG: Log search results
+        console.log("Search results:", results);
       } catch (error) {
         console.error("Search error:", error);
       } finally {
@@ -512,7 +541,7 @@ export default {
           id: conversationId,
           conversationId,
           otherUserId: seller.userId,
-          otherUserName: `${seller.firstName} ${seller.lastName}`.trim(), // Combine first and last name
+          otherUserName: `${seller.firstName} ${seller.lastName}`.trim(),
           otherUserPhoto: seller.photoURL,
           otherUserOnline: seller.isOnline,
           lastMessage: "",
@@ -530,9 +559,59 @@ export default {
       }
     };
 
+    // Function to show notification
+    const showNewMessageNotification = (message) => {
+      notificationMessage.value = message;
+      showNotification.value = true;
+      
+      // Play notification sound
+      const audio = new Audio('/notification-sound.mp3');
+      audio.play().catch(() => {
+        // Handle autoplay restrictions
+        console.log('Autoplay prevented');
+      });
+      
+      // Hide notification after 5 seconds
+      setTimeout(() => {
+        showNotification.value = false;
+      }, 5000);
+    };
+
+    // Add notification listener
+    const setupNotificationListener = () => {
+      const q = query(
+        collection(db, "conversations"),
+        where("participants", "array-contains", currentUserId)
+      );
+      
+      return onSnapshot(q, (snapshot) => {
+        snapshot.docChanges().forEach((change) => {
+          if (change.type === 'modified') {
+            const conversation = change.doc.data();
+            if (conversation.lastMessageSender === 'seller' && 
+                conversation.unreadCount > 0 &&
+                change.doc.id !== selectedConversation.value?.id) {
+              
+              // Get seller name for notification
+              const sellerId = conversation.participants.find(id => id !== currentUserId);
+              getDoc(doc(db, "sellers", sellerId)).then((sellerDoc) => {
+                if (sellerDoc.exists()) {
+                  const sellerData = sellerDoc.data();
+                  const fullName = `${sellerData.firstName || ''} ${sellerData.lastName || ''}`.trim();
+                  const sellerName = fullName || 'Seller';
+                  
+                  showNewMessageNotification(`${sellerName} sent you a message: ${conversation.lastMessage}`);
+                }
+              });
+            }
+          }
+        });
+      });
+    };
 
     onMounted(() => {
       fetchConversations();
+      setupNotificationListener();
     });
 
     onUnmounted(() => {
@@ -561,7 +640,6 @@ export default {
       sendMessage,
       formatConversationTime,
       formatMessageTime,
-      // Search related
       showSearch,
       searchQuery,
       searchResults,
@@ -570,6 +648,8 @@ export default {
       closeSearch,
       handleSearch,
       startNewChat,
+      showNotification,
+      notificationMessage,
     };
   }
 };
@@ -1036,5 +1116,48 @@ export default {
 .send-button:disabled {
   background-color: #ccc;
   cursor: not-allowed;
+}
+
+/* Add notification styles */
+.notification {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  background-color: #2e5c31;
+  color: white;
+  padding: 12px 20px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.farm-name {
+  font-size: 12px;
+  color: #666;
+  margin-top: 2px;
+}
+
+/* Dark mode support */
+:root.dark .notification {
+  background-color: #4a8f4d;
+}
+
+:root.dark .farm-name {
+  color: #ccc;
 }
 </style>

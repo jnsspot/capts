@@ -25,13 +25,20 @@
       <template v-else>
         <div class="cart-items">
           <div class="cart-item" v-for="(item, index) in cartItems" :key="item.productId">
+            <div class="item-checkbox">
+              <input 
+                type="checkbox" 
+                :checked="item.selected"
+                @change="toggleItemSelection(index)"
+              >
+            </div>
             <div class="item-image">
               <img :src="item.productImage" :alt="item.productName">
             </div>
             <div class="item-details">
               <h3>{{ item.productName }}</h3>
               <p class="item-shop">{{ item.farmName }}</p>
-              <p class="item-weight">{{ item.weight }}</p>
+              <p class="item-weight">{{ item.weight }}kg - {{ item.packagingType }}</p>
             </div>
             <div class="item-actions">
               <div class="quantity-controls">
@@ -76,8 +83,12 @@
         </div>
         
         <div class="checkout-section">
-          <button class="checkout-btn">
-            Proceed to Checkout
+          <button 
+            class="checkout-btn" 
+            :disabled="!hasSelectedItems"
+            @click="proceedToCheckout"
+          >
+            Proceed to Checkout ({{ selectedItemsCount }} items)
           </button>
         </div>
       </template>
@@ -96,10 +107,11 @@ import {
   Plus, 
   Trash2 
 } from 'lucide-vue-next';
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed } from 'vue';
 import { db } from '@/firebase/firebaseConfig';
-import { collection, query, where, getDocs } from "firebase/firestore";
+import { collection, query, where, getDocs, doc, updateDoc, deleteDoc } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
+import { useRouter } from 'vue-router';
 
 export default {
   components: {
@@ -116,12 +128,12 @@ export default {
     const discount = ref(0);
     const deliveryFee = ref(50);
     const auth = getAuth();
-    const currentUser = auth.currentUser;
+    const router = useRouter();
 
     const fetchCartItems = async () => {
       try {
-        if (currentUser) {
-          const userId = currentUser.uid;
+        if (auth.currentUser) {
+          const userId = auth.currentUser.uid;
           const q = query(
             collection(db, "carts"), 
             where("userId", "==", userId)
@@ -129,47 +141,117 @@ export default {
           
           const querySnapshot = await getDocs(q);
           cartItems.value = querySnapshot.docs.map(doc => ({
-            productId: doc.id,
+            id: doc.id,
             ...doc.data()
           }));
-        } else {
-          console.log("No user is logged in");
-          // You might want to redirect to login page here
         }
       } catch (error) {
         console.error("Error fetching cart items:", error);
       }
     };
 
-    // Rest of the methods remain the same
-    const goBack = () => {
-      window.history.back();
-    };
-    
-    const increaseQuantity = (index) => {
-      if (cartItems.value[index].quantity < cartItems.value[index].stock) {
-        cartItems.value[index].quantity += 1;
+    const toggleItemSelection = async (index) => {
+      try {
+        const item = cartItems.value[index];
+        const newSelectedState = !item.selected;
+        
+        // Update in Firestore
+        const cartItemRef = doc(db, 'carts', item.id);
+        await updateDoc(cartItemRef, {
+          selected: newSelectedState
+        });
+        
+        // Update local state
+        cartItems.value[index].selected = newSelectedState;
+      } catch (error) {
+        console.error('Error updating item selection:', error);
       }
     };
-    
-    const decreaseQuantity = (index) => {
-      if (cartItems.value[index].quantity > 1) {
-        cartItems.value[index].quantity -= 1;
+
+    const increaseQuantity = async (index) => {
+      try {
+        const item = cartItems.value[index];
+        const newQuantity = (item.quantity || 1) + 1;
+        
+        // Update in Firestore
+        const cartItemRef = doc(db, 'carts', item.id);
+        await updateDoc(cartItemRef, {
+          quantity: newQuantity
+        });
+        
+        // Update local state
+        cartItems.value[index].quantity = newQuantity;
+      } catch (error) {
+        console.error('Error updating quantity:', error);
       }
     };
-    
-    const removeItem = (index) => {
-      cartItems.value.splice(index, 1);
+
+    const decreaseQuantity = async (index) => {
+      try {
+        const item = cartItems.value[index];
+        if (item.quantity > 1) {
+          const newQuantity = item.quantity - 1;
+          
+          // Update in Firestore
+          const cartItemRef = doc(db, 'carts', item.id);
+          await updateDoc(cartItemRef, {
+            quantity: newQuantity
+          });
+          
+          // Update local state
+          cartItems.value[index].quantity = newQuantity;
+        }
+      } catch (error) {
+        console.error('Error updating quantity:', error);
+      }
     };
-    
+
+    const removeItem = async (index) => {
+      try {
+        const item = cartItems.value[index];
+        
+        // Delete from Firestore
+        await deleteDoc(doc(db, 'carts', item.id));
+        
+        // Update local state
+        cartItems.value.splice(index, 1);
+      } catch (error) {
+        console.error('Error removing item:', error);
+      }
+    };
+
     const calculateSubtotal = () => {
-      return cartItems.value.reduce((total, item) => {
-        return total + (item.price * (item.quantity || 1));
-      }, 0);
+      return cartItems.value
+        .filter(item => item.selected)
+        .reduce((total, item) => {
+          return total + (item.price * (item.quantity || 1));
+        }, 0);
     };
-    
+
     const calculateTotal = () => {
       return calculateSubtotal() + deliveryFee.value - discount.value;
+    };
+
+    const selectedItemsCount = computed(() => {
+      return cartItems.value.filter(item => item.selected).length;
+    });
+
+    const hasSelectedItems = computed(() => {
+      return selectedItemsCount.value > 0;
+    });
+
+    const proceedToCheckout = () => {
+      const selectedItems = cartItems.value.filter(item => item.selected);
+      router.push({
+        name: 'Checkout',
+        query: {
+          items: JSON.stringify(selectedItems)
+        }
+      });
+    };
+
+    const goBack = () => {
+      window.history.back();
     };
     
     const applyPromoCode = () => {
@@ -195,13 +277,17 @@ export default {
       promoCode,
       discount,
       deliveryFee,
+      selectedItemsCount,
+      hasSelectedItems,
       goBack,
       increaseQuantity,
       decreaseQuantity,
       removeItem,
       calculateSubtotal,
       calculateTotal,
-      applyPromoCode
+      applyPromoCode,
+      toggleItemSelection,
+      proceedToCheckout
     };
   }
 }
@@ -320,6 +406,16 @@ export default {
   margin-bottom: 10px;
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
   position: relative;
+}
+
+.item-checkbox {
+  margin-right: 10px;
+}
+
+.item-checkbox input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
 }
 
 .item-image {
@@ -470,5 +566,10 @@ export default {
   font-size: 16px;
   font-weight: 600;
   box-shadow: 0 3px 8px rgba(46, 92, 49, 0.3);
+}
+
+.checkout-btn:disabled {
+  background-color: #ccc;
+  cursor: not-allowed;
 }
 </style>

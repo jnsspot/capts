@@ -45,7 +45,6 @@ import AddEditProduct from '@/views/sellerFolder/AddEditProduct.vue';
 import Chat from '@/views/sellerFolder/Chat.vue';
 import Orders from '../views/sellerFolder/Orders.vue';
 // New Seller components from the other code
-import Product from '../views/sellerFolder/Product.vue';
 import SellerHome from '@/views/sellerFolder/SellerHome.vue';
 import SellerEditProfile from '@/views/sellerFolder/SellerEditProfile.vue';
 import SellerChat from '@/views/sellerFolder/SellerChat.vue';
@@ -53,6 +52,7 @@ import Forecasting from '@/views/sellerFolder/Forecasting.vue';
 import CropForecasting from '@/views/sellerFolder/CropForecasting.vue';
 import CustomersTable from '@/views/sellerFolder/CustomersTable.vue';
 import Analytics from '@/views/sellerFolder/Analytics.vue';
+import HarvestCalendarPage from '@/views/sellerFolder/HarvestCalendarPage.vue';
 
 const routes = [
   // Your existing routes (unchanged)
@@ -211,6 +211,12 @@ const routes = [
     meta: { requiresAuth: true, allowedRoles: ['seller'] },
   },
   {
+    path: '/harvest-calendar',
+    name: 'HarvestCalendar',
+    component: HarvestCalendarPage,
+    meta: { requiresAuth: true, allowedRoles: ['seller'] },
+  },
+  {
     path: '/customer-dashboard',
     name: 'CustomerDashboard',
     component: CustomerDashboard,
@@ -250,13 +256,6 @@ const routes = [
     path: '/products',
     name: 'productmanagement',
     component: ProductManagement
-  },
-
-  {
-    path: '/product',
-    name: 'product',
-    component: Product,
-    meta: { requiresAuth: true, allowedRoles: ['seller'] },
   },
   {
     path: '/seller-home',

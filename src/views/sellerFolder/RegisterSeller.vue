@@ -195,12 +195,12 @@
           <div class="form-group">
             <label for="validID">Valid ID</label>
             <div class="file-upload">
-              <input type="file" id="validID" class="file-input">
+              <input type="file" id="validID" class="file-input" @change="(e) => handleFileUpload(e, 'validID')">
               <div class="file-upload-button">
                 <Upload size="18" />
                 <span>Upload Valid ID</span>
               </div>
-              <span class="file-name">{{ formData.verificationDocs.validID }}</span>
+              <span class="file-name">{{ formData.verificationDocs.validID?.name || 'No file selected' }}</span>
             </div>
             <p class="file-help">Accepted formats: JPG, PNG, PDF (max 5MB)</p>
           </div>
@@ -208,12 +208,12 @@
           <div class="form-group">
             <label for="businessPermit">Business Permit</label>
             <div class="file-upload">
-              <input type="file" id="businessPermit" class="file-input">
+              <input type="file" id="businessPermit" class="file-input" @change="(e) => handleFileUpload(e, 'businessPermit')">
               <div class="file-upload-button">
                 <Upload size="18" />
                 <span>Upload Business Permit</span>
               </div>
-              <span class="file-name">{{ formData.verificationDocs.businessPermit }}</span>
+              <span class="file-name">{{ formData.verificationDocs.businessPermit?.name || 'No file selected' }}</span>
             </div>
             <p class="file-help">Accepted formats: JPG, PNG, PDF (max 5MB)</p>
           </div>
@@ -221,12 +221,12 @@
           <div class="form-group">
             <label for="farmCert">Farm Certification</label>
             <div class="file-upload">
-              <input type="file" id="farmCert" class="file-input">
+              <input type="file" id="farmCert" class="file-input" @change="(e) => handleFileUpload(e, 'farmCert')">
               <div class="file-upload-button">
                 <Upload size="18" />
                 <span>Upload Farm Certification</span>
               </div>
-              <span class="file-name">{{ formData.verificationDocs.farmCert }}</span>
+              <span class="file-name">{{ formData.verificationDocs.farmCert?.name || 'No file selected' }}</span>
             </div>
             <p class="file-help">Accepted formats: JPG, PNG, PDF (max 5MB)</p>
           </div>
@@ -259,13 +259,32 @@
           </div>
           
           <div class="form-group">
-            <label for="areasCovered">Areas Covered</label>
-            <textarea 
-              id="areasCovered" 
-              v-model="formData.deliveryInfo.areasCovered" 
-              placeholder="List the areas you can deliver to"
-              rows="3"
-            ></textarea>
+            <label>Areas Covered</label>
+            <div class="areas-covered-container">
+              <div v-for="(area, index) in formData.deliveryInfo.areasCovered" :key="area.id" class="area-input-group">
+                <input 
+                  type="text" 
+                  v-model="formData.deliveryInfo.areasCovered[index].area" 
+                  :placeholder="`Enter area #${index + 1}`"
+                  class="area-input"
+                >
+                <button 
+                  v-if="index > 1" 
+                  @click="removeArea(index)" 
+                  class="remove-area-button"
+                  type="button"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+            <button 
+              @click="addArea" 
+              class="add-area-button"
+              type="button"
+            >
+              + Add Another Area
+            </button>
           </div>
         </div>
         
@@ -409,7 +428,7 @@ export default {
         personalInfo: {
           firstName: "",
           lastName: "",
-          contactNumber: "",
+          contact: "",
           email: "",
           address: ""
         },
@@ -426,14 +445,17 @@ export default {
           accountNumber: ""
         },
         verificationDocs: {
-          validID: "",
-          businessPermit: "",
-          farmCert: ""
+          validID: null,
+          businessPermit: null,
+          farmCert: null
         },
         deliveryInfo: {
           deliveryMethod: "",
           operatingHours: "",
-          areasCovered: ""
+          areasCovered: [
+            { id: 0, area: "" },
+            { id: 1, area: "" }
+          ]
         },
         additionalDetails: {
           socialMedia: "",
@@ -466,14 +488,11 @@ export default {
           return;
         }
 
-        // Fetch user data from Firestore
         const userRef = doc(db, "users", user.uid);
         const userSnap = await getDoc(userRef);
 
         if (userSnap.exists()) {
           const userData = userSnap.data();
-
-          // Populate personalInfo fields with user data
           this.formData.personalInfo = {
             firstName: userData.firstName || "",
             lastName: userData.lastName || "",
@@ -498,57 +517,69 @@ export default {
         this.currentStep--;
       }
     },
+    goToStep(index) {
+      if (index >= 0 && index < this.steps.length) {
+        this.currentStep = index;
+      }
+    },
     async submitForm() {
-  try {
-    const user = auth.currentUser;
-    if (!user) {
-      alert("No authenticated user found. Please log in.");
-      return;
-    }
+      try {
+        const user = auth.currentUser;
+        if (!user) {
+          alert("No authenticated user found. Please log in.");
+          return;
+        }
 
-    // Upload files and get their download URLs
-    const validIDUrl = await this.uploadFile(this.formData.verificationDocs.validID);
-    const businessPermitUrl = await this.uploadFile(this.formData.verificationDocs.businessPermit);
-    const farmCertUrl = await this.uploadFile(this.formData.verificationDocs.farmCert);
+        // Upload files and get their download URLs
+        const validIDUrl = await this.uploadFile(this.formData.verificationDocs.validID);
+        const businessPermitUrl = await this.uploadFile(this.formData.verificationDocs.businessPermit);
+        const farmCertUrl = await this.uploadFile(this.formData.verificationDocs.farmCert);
 
-    const sellerData = {
-      userId: user.uid, // Changed from sellerId to userId
-      ...this.formData.personalInfo,  
-      ...this.formData.farmDetails,
-      ...this.formData.paymentInfo,
-      ...this.formData.deliveryInfo,
-      ...this.formData.additionalDetails,
-      validID: validIDUrl, // Store directly in the document
-      businessPermit: businessPermitUrl, // Store directly in the document
-      farmCert: farmCertUrl, // Store directly in the document
-      agreeTerms: this.formData.termsAgreement.agreeTerms,
-      consentData: this.formData.termsAgreement.consentData,
-      isVerified: false, // Default to false, can be updated later
-      createdAt: new Date().toISOString(),
-      wholesaleAvailability: this.formData.additionalDetails.wholesaleAvailability,
-    };
+        // Prepare areas covered data
+        const areasCoveredData = this.formData.deliveryInfo.areasCovered
+          .filter(area => area.area.trim() !== "")
+          .map(area => ({
+            id: area.id,
+            area: area.area
+          }));
 
-    // Save to Firestore
-    await addDoc(collection(db, "sellers"), sellerData);
-    alert("Registration successful!");
-    this.$router.push("/");
-  } catch (error) {
-    console.error("Error submitting form: ", error);
-    alert("Registration failed. Please try again.");
-  }
-},
+        const sellerData = {
+          userId: user.uid,
+          ...this.formData.personalInfo,
+          ...this.formData.farmDetails,
+          ...this.formData.paymentInfo,
+          deliveryInfo: {
+            deliveryMethod: this.formData.deliveryInfo.deliveryMethod,
+            operatingHours: this.formData.deliveryInfo.operatingHours,
+            areasCovered: areasCoveredData
+          },
+          ...this.formData.additionalDetails,
+          validID: validIDUrl,
+          businessPermit: businessPermitUrl,
+          farmCert: farmCertUrl,
+          agreeTerms: this.formData.termsAgreement.agreeTerms,
+          consentData: this.formData.termsAgreement.consentData,
+          isVerified: false,
+          createdAt: new Date().toISOString()
+        };
+
+        await addDoc(collection(db, "sellers"), sellerData);
+        alert("Registration successful!");
+        this.$router.push("/");
+      } catch (error) {
+        console.error("Error submitting form: ", error);
+        alert("Registration failed. Please try again.");
+      }
+    },
     async uploadFile(file) {
       if (!file) return null;
 
       const storage = getStorage();
       const storageRef = ref(storage, `sellers/${file.name}`);
-      console.log("Uploading file:", file.name);
-    
+      
       try {
         await uploadBytes(storageRef, file);
-        const downloadURL = await getDownloadURL(storageRef);
-        console.log("File uploaded. Download URL:", downloadURL);
-        return downloadURL;
+        return await getDownloadURL(storageRef);
       } catch (error) {
         console.error("Error uploading file:", error);
         return null;
@@ -557,9 +588,19 @@ export default {
     handleFileUpload(event, key) {
       const file = event.target.files[0];
       if (!file) return;
-
       this.formData.verificationDocs[key] = file;
     },
+    addArea() {
+      const newId = this.formData.deliveryInfo.areasCovered.length;
+      this.formData.deliveryInfo.areasCovered.push({
+        id: newId,
+        area: ""
+      });
+    },
+    removeArea(index) {
+      if (this.formData.deliveryInfo.areasCovered.length <= 2) return;
+      this.formData.deliveryInfo.areasCovered.splice(index, 1);
+    }
   }
 };
 </script>
@@ -867,5 +908,58 @@ export default {
 .submit-button:disabled {
   background-color: #ccc;
   cursor: not-allowed;
+}
+
+/* Areas Covered Styles */
+.areas-covered-container {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.area-input-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.area-input {
+  flex: 1;
+  padding: 12px 15px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+.remove-area-button {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background-color: #f0f0f0;
+  border: none;
+  color: #ff4444;
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.add-area-button {
+  background-color: #f0f0f0;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #2e5c31;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.add-area-button:hover {
+  background-color: #e0e0e0;
 }
 </style>

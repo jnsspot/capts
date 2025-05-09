@@ -1,9 +1,7 @@
 <template>
   <div class="sidebar" :class="{ 'dark-mode': isDarkMode }">
     <div class="logo-container">
-      <div class="logo-icon">
-        <div class="logo-circle"></div>
-      </div>
+      <img src="@/assets/logowhite.png" alt="FarmXpress Logo" class="logo-image">
       <div class="logo-text-container">
         <h1 class="logo-text">FarmXpress</h1>
         <span class="admin-badge">ADMIN</span>
@@ -40,6 +38,21 @@
           </li>
         </ul>
       </div>
+      
+      <div class="menu-section">
+        <span class="section-title">ADMINISTRATION</span>
+        <ul>
+          <li v-for="(item, index) in adminMenuItems" :key="index" 
+              :class="{ active: activeItem === item.name }"
+              @click="setActiveItem(item.name)">
+            <router-link :to="item.path" class="nav-link">
+              <component :is="item.icon" class="nav-icon" />
+              <span class="nav-text">{{ item.name }}</span>
+              <span v-if="item.badge" class="badge">{{ item.badge }}</span>
+            </router-link>
+          </li>
+        </ul>
+      </div>
     </nav>
     
     <div class="theme-toggle">
@@ -57,11 +70,10 @@
 
 <script setup>
 import { ref, watch, onMounted } from 'vue';
-import { useRoute } from 'vue-router'; // Import useRoute from Vue Router
+import { useRoute } from 'vue-router';
 import { 
   LayoutDashboard, 
   Users, 
-  UserCog,
   Store,
   ShoppingBag,
   Layers,
@@ -74,21 +86,20 @@ import {
   FileText,
   Sun,
   Moon,
-  LineChart
+  UserPlus,
+  Shield
 } from 'lucide-vue-next';
 
-const route = useRoute(); // Get the current route
+const route = useRoute();
 const activeItem = ref('');
 const isDarkMode = ref(false);
 
-// Main menu items
 const mainMenuItems = [
   { name: 'Dashboard', path: '/admin', icon: LayoutDashboard },
   { name: 'Notifications', path: '/admin/notifications', icon: Bell, badge: 12 },
   { name: 'Messages', path: '/admin/messages', icon: MessageSquare, badge: 5 }
 ];
 
-// Other menu items (Management & Analytics)
 const otherMenuItems = [
   { name: 'Sellers', path: '/admin/sellers', icon: Store },
   { name: 'Customers', path: '/admin/customers', icon: Users },
@@ -96,39 +107,40 @@ const otherMenuItems = [
   { name: 'Products', path: '/admin/products', icon: ShoppingBag },
   { name: 'Forecasting', path: '/admin/forecasting', icon: TrendingUp },
   { name: 'Price Monitoring', path: '/admin/price-monitoring', icon: DollarSign },
-  { name: 'Trends', path: '/admin/trends', icon: LineChart },
-  { name: 'User Management', path: '/admin/user-management', icon: UserCog },
   { name: 'Reports', path: '/admin/reports', icon: FileText },
   { name: 'Settings', path: '/admin/settings', icon: Settings },
   { name: 'Help', path: '/admin/help', icon: HelpCircle }
 ];
 
-// Function to set the active item based on the current route
+const adminMenuItems = [
+  { name: 'Admin Management', path: '/admin/admin-management', icon: Shield },
+  { name: 'Add Admin', path: '/admin/add-admin', icon: UserPlus }
+];
+
 const setActiveItemFromRoute = () => {
-  const currentPath = route.path; // Get the current path
-  const allMenuItems = [...mainMenuItems, ...otherMenuItems]; // Combine all menu items
-  const activeMenuItem = allMenuItems.find(item => item.path === currentPath); // Find the matching item
+  const currentPath = route.path;
+  const allMenuItems = [...mainMenuItems, ...otherMenuItems, ...adminMenuItems];
+  const activeMenuItem = allMenuItems.find(item => item.path === currentPath);
   if (activeMenuItem) {
-    activeItem.value = activeMenuItem.name; // Set the active item
+    activeItem.value = activeMenuItem.name;
   }
 };
 
-// Function to manually set the active item
 const setActiveItem = (itemName) => {
   activeItem.value = itemName;
 };
 
-// Watch for route changes and update the active item
 watch(() => route.path, () => {
   setActiveItemFromRoute();
 });
 
-// Set the active item when the component is mounted
 onMounted(() => {
   setActiveItemFromRoute();
   const savedTheme = localStorage.getItem('theme');
   if (savedTheme === 'dark') {
     setDarkMode();
+  } else {
+    setLightMode();
   }
 });
 
@@ -154,40 +166,31 @@ const setDarkMode = () => {
   flex-direction: column;
   overflow-y: auto;
   color: white;
-  position: fixed; /* Make the sidebar fixed */
+  position: fixed;
   top: 0;
   left: 0;
-  z-index: 1000; /* Ensure it stays on top */
+  z-index: 1000;
 }
 
 .logo-container {
   display: flex;
   align-items: center;
   padding: 20px;
-  gap: 10px;
+  gap: 8px;
   position: relative;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.logo-image {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
 }
 
 .logo-text-container {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-}
-
-.logo-icon {
-  width: 36px;
-  height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.logo-circle {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: white;
 }
 
 .logo-text {

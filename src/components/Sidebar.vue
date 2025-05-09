@@ -1,11 +1,31 @@
 <template>
-  <div class="sidebar" :class="{ 'dark-mode': isDarkMode, 'collapsed': isCollapsed }">
+  <!-- Mobile Header -->
+  <div class="mobile-header" :class="{ 'dark-mode': isDarkMode }" v-if="isMobile">
+    <button class="mobile-hamburger" @click="toggleMobileSidebar">
+      <svg viewBox="0 0 24 24" width="24" height="24">
+        <path fill="currentColor" d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/>
+      </svg>
+    </button>
+    <h1 class="mobile-logo-text">FarmXpress</h1>
+  </div>
+
+  <!-- Sidebar -->
+  <div class="sidebar-overlay" 
+       v-if="isMobile && isMobileSidebarOpen" 
+       @click="toggleMobileSidebar"></div>
+  
+  <div class="sidebar" :class="{ 
+    'dark-mode': isDarkMode, 
+    'collapsed': isCollapsed,
+    'mobile-sidebar': isMobile,
+    'mobile-open': isMobileSidebarOpen
+  }">
     <div class="logo-container">
-      <div class="logo-icon">
-        <div class="logo-circle"></div>
+      <div class="logo-content">
+        <img src="@/assets/logowhite.png" alt="Logo" class="sidebar-logo" v-if="!isMobile" />
+        <h1 class="logo-text">FarmXpress</h1>
       </div>
-      <h1 class="logo-text">FarmXpress</h1>
-      <button class="hamburger-btn" @click="toggleSidebar">
+      <button class="desktop-hamburger" @click="toggleSidebar" v-if="!isMobile">
         <svg viewBox="0 0 24 24" width="24" height="24">
           <path fill="currentColor" d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/>
         </svg>
@@ -16,11 +36,11 @@
       <ul>
         <li v-for="(item, index) in menuItems" :key="index" 
             :class="{ active: activeItem === item.name }"
-            @click="setActiveItem(item.name)">
+            @click="setActiveItem(item.name); isMobile && toggleMobileSidebar()">
           <router-link :to="item.path" class="nav-link">
             <component :is="item.icon" class="nav-icon" />
             <span class="nav-text">{{ item.name }}</span>
-            <span v-if="item.badge" class="badge">{{ item.badge }}</span>
+            <span v-if="item.badge && (!isCollapsed || isMobile)" class="badge">{{ item.badge }}</span>
           </router-link>
         </li>
       </ul>
@@ -40,7 +60,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, onBeforeUnmount } from 'vue';
 import { 
   LayoutDashboard, 
   Sprout, 
@@ -68,19 +88,29 @@ const props = defineProps({
 const activeItem = ref(props.initialActiveItem);
 const isDarkMode = ref(false);
 const isCollapsed = ref(false);
+const isMobile = ref(false);
+const isMobileSidebarOpen = ref(false);
+const mobileBreakpoint = 768;
+
+const checkScreenSize = () => {
+  isMobile.value = window.innerWidth < mobileBreakpoint;
+  if (!isMobile.value) {
+    isMobileSidebarOpen.value = false;
+  }
+};
 
 const menuItems = [
   { name: 'Dashboard', path: '/seller-dashboard', icon: LayoutDashboard },
   { name: 'Farm Products', path: '/products', icon: Sprout },
   { name: 'Forecasting', path: '/seller/forecasting', icon: TrendingUp },
-  { name: 'Harvest Calendar', path: '/calendar', icon: Calendar },
+  { name: 'Harvest Calendar', path: '/harvest-calendar', icon: Calendar },
   { name: 'Customers', path: '/customers', icon: Users },
-  { name: 'Analytics', path: 'seller/analytics', icon: BarChart },
+  { name: 'Analytics', path: '/seller/analytics', icon: BarChart },
   { name: 'Orders', path: '/orders', icon: Receipt },
   { name: 'Chat', path: 'seller/chat', icon: MessageSquare, badge: 8 },
   { name: 'Feedback', path: '/feedback', icon: ThumbsUp },
   { name: 'Reports', path: '/reports', icon: FileText },
-  { name: 'Help', path: '/help', icon: HelpCircle },
+  { name: 'Help', path: '/sellerhelp', icon: HelpCircle },
   { name: 'Settings', path: '/settings', icon: Settings }
 ];
 
@@ -105,6 +135,10 @@ const toggleSidebar = () => {
   localStorage.setItem('sidebarCollapsed', isCollapsed.value);
 };
 
+const toggleMobileSidebar = () => {
+  isMobileSidebarOpen.value = !isMobileSidebarOpen.value;
+};
+
 onMounted(() => {
   const savedTheme = localStorage.getItem('theme');
   if (savedTheme === 'dark') {
@@ -115,24 +149,84 @@ onMounted(() => {
   if (savedCollapseState === 'true') {
     isCollapsed.value = true;
   }
+  
+  checkScreenSize();
+  window.addEventListener('resize', checkScreenSize);
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', checkScreenSize);
 });
 </script>
 
 <style scoped>
+.mobile-header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 56px;
+  background: linear-gradient(135deg, #2e5c31, #4a8f4d);
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  z-index: 1000;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+.mobile-header.dark-mode {
+  background: linear-gradient(135deg, #1a3a1c, #2e5c31);
+}
+
+.mobile-hamburger {
+  background: none;
+  border: none;
+  color: white;
+  padding: 8px;
+  margin-right: 16px;
+}
+
+.mobile-logo-text {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #ffffff;
+  margin: 0;
+  flex-grow: 1;
+  text-align: center;
+}
+
+.sidebar-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 998;
+}
+
 .sidebar {
-  width: 230px;
+  width: 250px;
   height: 100vh;
   background: linear-gradient(135deg, #2e5c31, #4a8f4d);
   border-right: 1px solid rgba(255, 255, 255, 0.1);
   display: flex;
   flex-direction: column;
-  transition: all 0.3s ease;
+  transition: transform 0.3s ease;
   overflow-y: auto;
   position: fixed;
   left: 0;
   top: 0;
-  z-index: 100;
+  z-index: 999;
   padding: 0;
+}
+
+.sidebar.mobile-sidebar {
+  transform: translateX(-100%);
+}
+
+.sidebar.mobile-sidebar.mobile-open {
+  transform: translateX(0);
 }
 
 .sidebar.collapsed {
@@ -142,40 +236,21 @@ onMounted(() => {
 .logo-container {
   display: flex;
   align-items: center;
-  padding: 12px 10px;
-  gap: 8px;
+  justify-content: space-between;
+  padding: 16px 12px;
   position: relative;
-  margin: 0;
-  min-height: 56px;
 }
 
-.logo-icon {
-  width: 32px;
-  height: 32px;
+.logo-content {
   display: flex;
   align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  transition: all 0.3s ease;
+  gap: 8px;
 }
 
-.sidebar.collapsed .logo-icon {
-  width: 0;
-  opacity: 0;
-  overflow: hidden;
-}
-
-.logo-circle {
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #ffffff, #e0e0e0);
-  transition: all 0.3s ease;
-}
-
-.sidebar.collapsed .logo-circle {
-  opacity: 0;
-  width: 0;
+.sidebar-logo {
+  height: 28px;
+  width: auto;
+  object-fit: contain;
 }
 
 .logo-text {
@@ -183,50 +258,26 @@ onMounted(() => {
   font-weight: 700;
   color: #ffffff;
   white-space: nowrap;
-  transition: all 0.3s ease;
+  margin: 0;
 }
 
-.sidebar.collapsed .logo-text {
-  opacity: 0;
-  width: 0;
-  overflow: hidden;
+.sidebar.collapsed .logo-text,
+.sidebar.collapsed .sidebar-logo {
+  display: none;
 }
 
-.hamburger-btn {
+.desktop-hamburger {
   background: none;
   border: none;
   color: white;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   padding: 8px;
-  border-radius: 4px;
-  transition: all 0.2s ease;
-  position: absolute;
-  right: 8px;
-  width: 40px;
-  height: 40px;
-}
-
-.sidebar.collapsed .hamburger-btn {
-  position: static;
-  margin: 0 auto;
-}
-
-.hamburger-btn svg {
-  width: 24px;
-  height: 24px;
-}
-
-.hamburger-btn:hover {
-  background-color: rgba(255, 255, 255, 0.1);
 }
 
 .nav-menu {
   flex: 1;
   margin-top: 8px;
   padding: 0 8px;
+  overflow-y: auto;
 }
 
 .nav-menu ul {
@@ -237,7 +288,6 @@ onMounted(() => {
 
 .nav-menu li {
   margin: 6px 0;
-  position: relative;
 }
 
 .nav-link {
@@ -246,11 +296,8 @@ onMounted(() => {
   padding: 10px 12px;
   color: rgba(255, 255, 255, 0.8);
   text-decoration: none;
-  transition: all 0.2s ease;
-  border-left: 3px solid transparent;
-  white-space: nowrap;
-  overflow: hidden;
   border-radius: 6px;
+  position: relative;
 }
 
 .nav-link:hover {
@@ -272,19 +319,8 @@ onMounted(() => {
   flex-shrink: 0;
 }
 
-.sidebar.collapsed .nav-icon {
-  margin-right: 0;
-}
-
 .nav-text {
-  transition: all 0.3s ease;
   font-size: 0.95rem;
-}
-
-.sidebar.collapsed .nav-text {
-  opacity: 0;
-  width: 0;
-  overflow: hidden;
 }
 
 .badge {
@@ -302,10 +338,12 @@ onMounted(() => {
 }
 
 .sidebar.collapsed .badge {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  transform: scale(0.8);
+  display: none;
+}
+
+.sidebar:not(.collapsed) .badge,
+.sidebar.mobile-sidebar .badge {
+  display: flex;
 }
 
 .theme-toggle {
@@ -314,19 +352,6 @@ onMounted(() => {
   background-color: rgba(255, 255, 255, 0.15);
   border-radius: 8px;
   padding: 4px;
-  overflow: hidden;
-  transition: all 0.3s ease;
-}
-
-.sidebar.collapsed .theme-toggle {
-  flex-direction: column;
-  align-items: center;
-  padding: 4px;
-  gap: 4px;
-}
-
-.sidebar.collapsed .theme-toggle span {
-  display: none;
 }
 
 .theme-btn {
@@ -341,8 +366,6 @@ onMounted(() => {
   border-radius: 6px;
   cursor: pointer;
   color: rgba(255, 255, 255, 0.8);
-  transition: all 0.2s ease;
-  white-space: nowrap;
   font-size: 0.85rem;
 }
 
@@ -356,34 +379,47 @@ onMounted(() => {
   background: linear-gradient(135deg, #1a3a1c, #2e5c31);
 }
 
-.dark-mode .theme-toggle {
-  background-color: rgba(0, 0, 0, 0.2);
+/* Collapsed state styles */
+.sidebar.collapsed .nav-text,
+.sidebar.collapsed .theme-toggle span {
+  display: none;
 }
 
-.dark-mode .theme-btn.active {
-  background-color: rgba(0, 0, 0, 0.3);
-  color: #ffffff;
+.sidebar.collapsed .nav-icon {
+  margin-right: 0;
 }
 
-/* Tooltip for collapsed state */
-.sidebar.collapsed li {
-  position: relative;
+.sidebar.collapsed .theme-toggle {
+  flex-direction: column;
+  align-items: center;
+  padding: 4px;
+  gap: 4px;
 }
 
-.sidebar.collapsed li:hover::after {
-  content: attr(data-tooltip);
-  position: absolute;
-  left: 100%;
-  top: 50%;
-  transform: translateY(-50%);
-  background-color: #4a8f4d;
-  color: white;
-  padding: 5px 10px;
-  border-radius: 4px;
-  font-size: 0.85rem;
-  white-space: nowrap;
-  z-index: 1000;
-  margin-left: 10px;
-  pointer-events: none;
+/* Responsive styles */
+@media (max-width: 767px) {
+  .sidebar {
+    width: 280px;
+    max-width: 80%;
+  }
+  
+  .sidebar:not(.mobile-open) {
+    display: none;
+  }
+  
+  .mobile-header {
+    display: flex;
+  }
+}
+
+@media (min-width: 768px) {
+  .mobile-header {
+    display: none;
+  }
+  
+  .sidebar {
+    transform: none !important;
+    display: flex !important;
+  }
 }
 </style>

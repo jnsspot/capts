@@ -32,7 +32,7 @@
           </div>
           <div class="address-details">
             <h3>{{ selectedAddress.name }}</h3>
-            <p>{{ selectedAddress.address }}</p>
+            <p>{{ selectedAddress.barangay }}, {{ selectedAddress.municipality }}, {{ selectedAddress.province }}</p>
             <p v-if="selectedAddress.locationNotes" class="location-notes">
               <small>Notes: {{ selectedAddress.locationNotes }}</small>
             </p>
@@ -45,28 +45,28 @@
         <h2>Order Summary</h2>
         
         <div class="order-items">
-          <div class="product-item">
+          <div class="product-item" v-for="(item, index) in orderItems" :key="index">
             <div class="product-image">
-              <img :src="order.productImage || placeholderImage" :alt="order.productName">
+              <img :src="item.productImage || placeholderImage" :alt="item.productName">
             </div>
             
             <div class="product-details">
               <div class="product-header">
-                <h3>{{ order.productName || 'Unnamed Product' }}</h3>
-                <span class="packaging">Packaging: {{ order.packagingType || 'N/A' }}</span>
+                <h3>{{ item.productName || 'Unnamed Product' }}</h3>
+                <span class="packaging">Packaging: {{ item.packagingType || 'N/A' }}</span>
               </div>
               
               <div class="price-quantity-controls">
                 <div class="quantity-controls">
-                  <button class="quantity-btn" @click="decreaseQuantity">
+                  <button class="quantity-btn" @click="decreaseQuantity(item)">
                     <Minus size="16" />
                   </button>
-                  <span class="quantity">{{ order.weight || 0 }} kg</span>
-                  <button class="quantity-btn" @click="increaseQuantity">
+                  <span class="quantity">{{ item.weight || 0 }} kg</span>
+                  <button class="quantity-btn" @click="increaseQuantity(item)">
                     <Plus size="16" />
                   </button>
                 </div>
-                <span class="price">₱{{ order.totalPrice || 0 }}</span>
+                <span class="price">₱{{ item.price || 0 }}</span>
               </div>
             </div>
           </div>
@@ -252,7 +252,7 @@
                 </div>
                 <div class="address-option-details">
                   <h3>{{ address.name }}</h3>
-                  <p>{{ address.address }}</p>
+                  <p>{{ address.barangay }}, {{ address.municipality }}, {{ address.province }}</p>
                   <p v-if="address.locationNotes" class="location-notes">
                     <small>Notes: {{ address.locationNotes }}</small>
                   </p>
@@ -267,14 +267,39 @@
                 <label>Address Name (e.g. Home, Work)</label>
                 <input type="text" v-model="newAddress.name" placeholder="Home, Work, etc." required>
               </div>
+              
               <div class="form-group">
-                <label>Full Address</label>
-                <textarea v-model="newAddress.address" placeholder="Street, City, Country" required></textarea>
+                <label>Province</label>
+                <select v-model="newAddress.province" disabled>
+                  <option value="Oriental Mindoro">Oriental Mindoro</option>
+                </select>
               </div>
+              
+              <div class="form-group">
+                <label>Municipality/City</label>
+                <select v-model="newAddress.municipality" @change="updateBarangays" required>
+                  <option value="" disabled selected>Select Municipality/City</option>
+                  <option v-for="municipality in municipalities" :value="municipality" :key="municipality">
+                    {{ municipality }}
+                  </option>
+                </select>
+              </div>
+              
+              <div class="form-group">
+                <label>Barangay</label>
+                <select v-model="newAddress.barangay" required>
+                  <option value="" disabled selected>Select Barangay</option>
+                  <option v-for="barangay in barangays" :value="barangay" :key="barangay">
+                    {{ barangay }}
+                  </option>
+                </select>
+              </div>
+              
               <div class="form-group">
                 <label>Location Notes (Optional)</label>
                 <textarea v-model="newAddress.locationNotes" placeholder="Landmarks, special instructions, etc."></textarea>
               </div>
+              
               <div class="form-actions">
                 <button class="cancel-button" @click="cancelNewAddress">Cancel</button>
                 <button class="confirm-button" @click="saveNewAddress">Save Address</button>
@@ -345,10 +370,30 @@ import {
   updateDoc,
   serverTimestamp,
   arrayUnion,
-  runTransaction
+  runTransaction,
+  deleteDoc
 } from 'firebase/firestore';
 import { db, auth } from '@/firebase/firebaseConfig';
 import Notification from '@/components/Notification.vue';
+
+// Oriental Mindoro data from Register.vue
+const orientalMindoroData = {
+  "Baco": ["Alag", "Bangkatan", "Burbuli", "Catwiran I", "Catwiran II", "Dulangan I", "Dulangan II", "Lumangbayan", "Malapad", "Mangangan I", "Mangangan II", "Mayabig", "Pambisan", "Poblacion", "Pulang-Tubig", "Putican-Cabulo", "San Andres", "San Ignacio", "Santa Cruz", "Santa Rosa I", "Santa Rosa II", "Tabon-Tabon", "Tagumpay", "Water"],
+  "Bansud": ["Alcate", "Bato", "Buenavista", "Burgos", "Cambunang", "Canaan", "Daguit", "Marfrancisco", "Pag-asa", "Poblacion", "Proper Bansud", "Proper Tiguisan", "Rosacara", "Salcedo", "Sumagui", "Villa Pag-asa"],
+  "Bongabong": ["Anilao", "Aplaya", "Bagong Bayan I", "Bagong Bayan II", "Batangan", "Bukal", "Camantigue", "Carmen", "Cawayan", "Dayhagan", "Formon", "Hagan", "Hagupit", "Ilasan", "Kaligtasan", "Labasan", "Mag-asawang Tubig", "Malitbog", "Mapang", "Masaguisi", "Morente", "Ogbot", "Orconuma", "Poblacion", "Polusahi", "Sagana", "San Isidro", "San Jose", "San Juan", "Santa Cruz", "Sinanlaban", "Tawas", "Villa M. Principe"],
+  "Bulalacao": ["Bagong Sikat", "Balatasan", "Benli", "Cabugao", "Cambunang", "Camilmil", "Giagan", "Maasin", "Maujao", "Milagrosa", "Nasukob", "Poblacion", "San Francisco", "San Isidro", "San Juan", "San Roque", "Siguian"],
+  "Calapan": ["Balingayan", "Balite", "Baruyan", "Batino", "Bayanan I", "Bayanan II", "Bulusan", "Comunal", "Guinobatan", "Gutad", "Ibaba East", "Ibaba West", "Ilaya", "Lalud", "Lazareto", "Libis", "Lumangbayan", "Mahabang Parang", "Maidlang", "Malad", "Malamig", "Managpi", "Masipit", "Nag-Iba I", "Nag-Iba II", "Navotas", "Pachoca", "Palhi", "Panggalaan", "Parang", "Patas", "Puting Tubig", "San Antonio", "San Vicente Central", "San Vicente East", "San Vicente North", "San Vicente South", "San Vicente West", "Sta. Cruz", "Sta. Isabel", "Sta. Maria Village", "Sto. Niño", "Sapul", "Silonay", "Sta. Rita", "Sucol", "Suqui", "Tawagan", "Tawiran", "Tibag", "Wawa"],
+  "Gloria": ["Agos", "Agustin", "Andres Bonifacio", "Balete", "Banus", "Banutan", "Buong Lupa", "Bulaklakan", "Gaudencio Antonio", "Guimbonan", "Kawit", "Lucio Laurel", "Macario Adriatico", "Malabo", "Maligaya", "Malubay", "Manguyang", "Maragooc", "Mirayan", "Narra", "Papandungin", "San Antonio", "Santa Maria", "Santo Niño", "Talaban", "Tambong", "Tigbao", "Villa Hermosa", "Villahermosa", "Villarico"],
+  "Mansalay": ["B. Del Mundo", "Balugo", "Bonbon", "Budburan", "Cabdangan", "Caflanan", "Don Pedro", "Maliwanag", "Manaul", "Panaytayan", "Poblacion", "Roma", "Santa Brigida", "Santa Maria", "Villa Celestial", "Wasig"],
+  "Naujan": ["Adrialuna", "Antipolo", "Apitong", "Arangin", "Aurora", "Bacungan", "Bagong Buhay", "Bancuro", "Barcenaga", "Bayani", "Buhangin", "Concepcion", "Dao", "Del Pilar", "Estrella", "Evangelista", "Gamao", "General Esco", "Herera", "Inarawan", "Kalinisan", "Laguna", "Andres Ilagan", "Mabini", "Andres Bonifacio", "Maharika", "Malaya", "Malinao", "Malvar", "Masagana", "Masaguing", "Melgar A", "Melgar B", "Metolza", "Montelago", "Montemayor", "Motoderazo", "Mulawin", "Nag-Iba I", "Nag-Iba II", "Pagkakaisa", "Paniquian", "Pinagsabangan I", "Pinagsabangan II", "Poblacion I", "Poblacion II", "Poblacion III", "Sampaguita", "San Agustin I", "San Agustin II", "San Andres", "San Antonio", "San Carlos", "San Isidro", "San Jose", "San Luis", "San Nicolas", "San Pedro", "Santa Cruz", "Santa Isabel", "Santa Maria", "Santiago", "Santo Niño", "Tagumpay", "Tigkan"],
+  "Pinamalayan": ["Anoling", "Bacungan", "Bangbang", "Banus", "Buli", "Caguray", "Calingag", "Del Razon", "Guinhawa", "Inclanay", "Lumambayan", "Malaya", "Maliangcog", "Maningcol", "Marayos", "Marfrancisco", "Nabuslot", "Pagalagala", "Palayan", "Pambisan", "Panikihan", "Pili", "Quinabigan", "Ranzo", "Rosario", "Sabang", "Santa Isabel", "Santa Maria", "Santa Rita", "Santo Niño", "Wawa"],
+  "Pola": ["Bacawan", "Bacungan", "Batuhan", "Bayanan", "Biga", "Buhay Na Tubig", "Calima", "Casiligan", "Malibago", "Maluanluan", "Matulatula", "Munting Mapino", "Pahilahan", "Panikihan", "Poblacion", "Pula", "Puting Cacao", "Tagbakin", "Tiguihan"],
+  "Puerto Galera": ["Aninuan", "Balanoy", "Balatero", "Dulangan", "Palangan", "Sabang", "San Antonio", "San Isidro", "Santo Niño", "Tabinay", "Villaflor"],
+  "Roxas": ["Bagumbayan", "Barangay I", "Barangay II", "Barangay III", "Barangay IV", "Barangay V", "Barangay VI", "Barangay VII", "Barangay VIII", "Barangay IX", "Barangay X", "Barangay XI", "Barangay XII", "Cantil", "Dangay", "Happy Valley", "Libertad", "Libtong", "Lumangbayan", "Malaga", "Maraska", "Odiong", "Paclasan", "San Aquilino", "San Isidro", "San Jose", "San Mariano", "San Miguel", "San Rafael", "San Vicente", "Sta. Cruz", "Sta. Elena", "Sta. Maria", "Sto. Niño", "Wawa"],
+  "San Teodoro": ["Bigaan", "Caagutayan", "Calangatan", "Calsapa", "Ilag", "Lumangbayan", "Poblacion", "Tacligan"],
+  "Socorro": ["Bato", "Bayuin", "Bugtong Na Tuog", "Calocmay", "Catiningan", "F. Tantoco", "Happy Valley", "Leuteboro", "Lumangbayan", "Matungao", "Monteverde", "Poblacion I", "Poblacion II", "Poblacion III", "Poblacion IV", "Poblacion V", "Poblacion VI", "Poblacion VII", "Poblacion VIII", "Santo Domingo", "Villaflor"],
+  "Victoria": ["Alcate", "Antipolo", "Bacungan", "Bagong Buhay", "Bambanin", "Bethel", "Canaan", "Concepcion", "Duongan", "Loyal", "Mabini", "Macatoc", "Malabo", "Mercedes", "Ogbot", "Orion", "San Antonio", "San Cristobal", "San Gabriel", "San Gelacio", "San Isidro", "San Juan", "San Narciso", "Urdaneta"]
+};
 
 export default {
   components: {
@@ -384,18 +429,18 @@ export default {
     const router = useRouter();
     
     // Initialize order data
-    const order = ref({
-      ...props.orderData,
-      ...(route.query.productId ? {
-        productId: route.query.productId,
-        productName: route.query.productName,
-        productImage: route.query.productImage,
-        weight: parseFloat(route.query.weight) || 0,
-        packagingType: route.query.packagingType,
-        totalPrice: parseFloat(route.query.totalPrice) || 0,
-        sellerId: route.query.sellerId,
-        pricePerKg: parseFloat(route.query.pricePerKg) || 0
-      } : {})
+    const orderItems = ref([]);
+    
+    // Parse items from route query
+    onMounted(() => {
+      try {
+        if (route.query.items) {
+          orderItems.value = JSON.parse(route.query.items);
+        }
+      } catch (error) {
+        console.error('Error parsing order items:', error);
+        showNotificationMessage('Error loading order items', 'error');
+      }
     });
 
     // Notification state
@@ -414,9 +459,16 @@ export default {
     const showAddressModal = ref(false);
     const showNewAddressForm = ref(false);
     const loadingAddresses = ref(false);
+    
+    // Location data
+    const municipalities = ref(Object.keys(orientalMindoroData));
+    const barangays = ref([]);
+    
     const newAddress = ref({
       name: '',
-      address: '',
+      province: 'Oriental Mindoro',
+      municipality: '',
+      barangay: '',
       locationNotes: ''
     });
     
@@ -440,19 +492,25 @@ export default {
     };
 
     // Quantity control methods
-    const increaseQuantity = () => {
-      order.value.weight += 0.5;
-      order.value.totalPrice = order.value.weight * order.value.pricePerKg;
+    const increaseQuantity = (item) => {
+      item.weight += 0.5;
+      item.totalPrice = item.weight * item.pricePerKg;
     };
 
-    const decreaseQuantity = () => {
-      if (order.value.weight > 0.5) {
-        order.value.weight -= 0.5;
-        order.value.totalPrice = order.value.weight * order.value.pricePerKg;
+    const decreaseQuantity = (item) => {
+      if (item.weight > 0.5) {
+        item.weight -= 0.5;
+        item.totalPrice = item.weight * item.pricePerKg;
       }
     };
 
     const placeholderImage = 'https://via.placeholder.com/150';
+    
+    // Update barangays when municipality changes
+    const updateBarangays = () => {
+      barangays.value = orientalMindoroData[newAddress.value.municipality] || [];
+      newAddress.value.barangay = '';
+    };
     
     // Fetch user addresses from Firestore
     const fetchUserAddresses = async () => {
@@ -491,7 +549,7 @@ export default {
     
     // Save new address to user's addresses in Firestore
     const saveNewAddress = async () => {
-      if (!newAddress.value.name || !newAddress.value.address) {
+      if (!newAddress.value.name || !newAddress.value.municipality || !newAddress.value.barangay) {
         showNotificationMessage('Please fill in all required fields', 'error');
         return;
       }
@@ -506,8 +564,11 @@ export default {
         await updateDoc(userDocRef, {
           addresses: arrayUnion({
             name: newAddress.value.name,
-            address: newAddress.value.address,
-            locationNotes: newAddress.value.locationNotes || ''
+            province: newAddress.value.province,
+            municipality: newAddress.value.municipality,
+            barangay: newAddress.value.barangay,
+            locationNotes: newAddress.value.locationNotes || '',
+            address: `${newAddress.value.barangay}, ${newAddress.value.municipality}, ${newAddress.value.province}`
           })
         });
         
@@ -519,7 +580,9 @@ export default {
         
         newAddress.value = {
           name: '',
-          address: '',
+          province: 'Oriental Mindoro',
+          municipality: '',
+          barangay: '',
           locationNotes: ''
         };
         showNewAddressForm.value = false;
@@ -534,7 +597,9 @@ export default {
     const cancelNewAddress = () => {
       newAddress.value = {
         name: '',
-        address: '',
+        province: 'Oriental Mindoro',
+        municipality: '',
+        barangay: '',
         locationNotes: ''
       };
       showNewAddressForm.value = false;
@@ -559,9 +624,11 @@ export default {
       }, 5000);
     };
 
-    // Calculations
+    // Calculations for multiple items
     const subtotal = computed(() => {
-      return order.value.totalPrice || 0;
+      return orderItems.value.reduce((total, item) => {
+        return total + (item.price * (item.quantity || 1));
+      }, 0);
     });
     
     const deliveryFee = computed(() => {
@@ -575,7 +642,7 @@ export default {
       return subtotal.value + fee + tax.value;
     });
 
-    // Place order function
+    // Place order function for multiple items
     const placeOrder = async () => {
       if (!selectedAddress.value) {
         showNotificationMessage('Please select a delivery address', 'error');
@@ -596,67 +663,77 @@ export default {
         const orderCode = generateOrderCode();
         orderNumber.value = orderCode;
 
-        // Get product data
-        const productDoc = await getDoc(doc(db, 'products', order.value.productId));
-        if (!productDoc.exists()) {
-          throw new Error('Product not found');
-        }
-        const productData = productDoc.data();
-
-        // Process the order transaction
-        await runTransaction(db, async (transaction) => {
-          const productRef = doc(db, 'products', order.value.productId);
-          const currentStock = productData.stock;
-          const orderedWeight = order.value.weight;
-          
-          if (currentStock < orderedWeight) {
-            throw new Error(`Only ${currentStock}kg available. Please adjust your order.`);
+        // Process each item in the order
+        for (const item of orderItems.value) {
+          // Get product data
+          const productDoc = await getDoc(doc(db, 'products', item.productId));
+          if (!productDoc.exists()) {
+            throw new Error(`Product ${item.productName} not found`);
           }
-          
-          // Update product stock
-          transaction.update(productRef, { 
-            stock: currentStock - orderedWeight 
-          });
-          
-          // Create order document
-          const orderRef = doc(collection(db, 'orders'));
-          transaction.set(orderRef, {
-            orderCode: orderCode,
-            sellerId: order.value.sellerId,
-            productId: order.value.productId,
-            productName: order.value.productName,
-            productImage: order.value.productImage,
-            price: order.value.pricePerKg,
-            totalPrice: total.value,
-            weight: order.value.weight,
-            packagingType: order.value.packagingType,
-            paymentMethod: paymentMethod.value,
-            Location: {
-              address: selectedAddress.value.address,
-              notes: selectedAddress.value.locationNotes || ''
-            },
-            status: 'Processing',
-            createdAt: serverTimestamp(),
-            userId: auth.currentUser.uid,
-            username: (await getDoc(doc(db, 'users', auth.currentUser.uid))).data().username || '',
-          });
-        });
+          const productData = productDoc.data();
 
-        // Save to sales collection
-        const saleData = {
-          productId: order.value.productId,
-          productName: order.value.productName,
-          category: productData.category || 'uncategorized',
-          quantity: order.value.weight,
-          price: order.value.pricePerKg,
-          totalPrice: order.value.pricePerKg * order.value.weight,
-          timestamp: serverTimestamp(),
-          sellerId: order.value.sellerId,
-          season: getCurrentSeason(),
-          orderCode: orderCode
-        };
+          // Process the order transaction
+          await runTransaction(db, async (transaction) => {
+            const productRef = doc(db, 'products', item.productId);
+            const currentStock = productData.stock;
+            const orderedWeight = item.weight;
+            
+            if (currentStock < orderedWeight) {
+              throw new Error(`Only ${currentStock}kg available for ${item.productName}. Please adjust your order.`);
+            }
+            
+            // Update product stock
+            transaction.update(productRef, { 
+              stock: currentStock - orderedWeight 
+            });
+            
+            // Create order document
+            const orderRef = doc(collection(db, 'orders'));
+            transaction.set(orderRef, {
+              orderCode: orderCode,
+              sellerId: item.sellerId,
+              productId: item.productId,
+              productName: item.productName,
+              productImage: item.productImage,
+              price: item.price,
+              totalPrice: item.price * item.weight,
+              weight: item.weight,
+              packagingType: item.packagingType,
+              paymentMethod: paymentMethod.value,
+              Location: {
+                province: selectedAddress.value.province,
+                municipality: selectedAddress.value.municipality,
+                barangay: selectedAddress.value.barangay,
+                address: `${selectedAddress.value.barangay}, ${selectedAddress.value.municipality}, ${selectedAddress.value.province}`,
+                notes: selectedAddress.value.locationNotes || ''
+              },
+              status: 'Processing',
+              createdAt: serverTimestamp(),
+              userId: auth.currentUser.uid,
+              username: (await getDoc(doc(db, 'users', auth.currentUser.uid))).data().username || '',
+            });
 
-        const saleRef = await addDoc(collection(db, 'sales'), saleData);
+            // Save to sales collection
+            const saleData = {
+              productId: item.productId,
+              productName: item.productName,
+              category: productData.category || 'uncategorized',
+              quantity: item.weight,
+              price: item.price,
+              totalPrice: item.price * item.weight,
+              timestamp: serverTimestamp(),
+              sellerId: item.sellerId,
+              season: getCurrentSeason(),
+              orderCode: orderCode
+            };
+
+            const saleRef = await addDoc(collection(db, 'sales'), saleData);
+
+            // Remove item from cart
+            const cartItemRef = doc(db, 'carts', item.id);
+            await deleteDoc(cartItemRef);
+          });
+        }
         
         // Show success
         showSuccessModal.value = true;
@@ -690,8 +767,12 @@ export default {
     });
     
     return {
-      // Data
-      order,
+      orderItems,
+      subtotal,
+      deliveryFee,
+      tax,
+      total,
+      placeOrder,
       placeholderImage,
       increaseQuantity,
       decreaseQuantity,
@@ -704,6 +785,9 @@ export default {
       showNewAddressForm,
       newAddress,
       loadingAddresses,
+      municipalities,
+      barangays,
+      updateBarangays,
       
       // Payment
       paymentMethod,
@@ -712,12 +796,6 @@ export default {
       
       // Delivery
       deliveryOption,
-      deliveryFee,
-      
-      // Calculations
-      subtotal,
-      tax,
-      total,
       
       // Notification
       showNotification,
@@ -732,14 +810,12 @@ export default {
       confirmAddress,
       saveNewAddress,
       cancelNewAddress,
-      placeOrder,
       continueShopping,
       showNotificationMessage
     };
   }
 }
 </script>
-
 
 <style scoped>
 /* Base styles */
@@ -822,6 +898,12 @@ export default {
 .product-image {
   width: 100%;
   height: 150px;
+}
+
+.product-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .checkout {
@@ -1455,6 +1537,7 @@ export default {
   border-radius: 10px;
   font-weight: 500;
 }
+
 .new-address-form {
   padding: 15px;
   border: 1px dashed #2e5c31;
@@ -1478,7 +1561,8 @@ export default {
 }
 
 .form-group input,
-.form-group textarea {
+.form-group textarea,
+.form-group select {
   width: 100%;
   padding: 10px;
   border: 1px solid #ddd;
@@ -1499,5 +1583,35 @@ export default {
   color: #666;
   font-size: 0.8em;
   margin-top: 5px;
+}
+
+/* Location select styles */
+.location-select {
+  position: relative;
+  margin-bottom: 15px;
+}
+
+.location-select select {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #e0e0e0;
+  border-radius: 10px;
+  font-size: 14px;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-color: white;
+}
+
+.location-select::after {
+  content: '\f078';
+  font-family: 'Font Awesome 5 Free';
+  font-weight: 900;
+  position: absolute;
+  right: 15px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #999;
+  pointer-events: none;
 }
 </style>

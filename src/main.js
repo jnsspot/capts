@@ -4,37 +4,61 @@ import './registerServiceWorker'; // Service worker setup
 import router from './router';
 import store from './store'; // Import the store
 import { auth, db } from './firebase/firebaseConfig'; // Import auth and db
-import { doc, updateDoc } from 'firebase/firestore'; // Import Firestore functions
+import { doc, updateDoc, getDoc } from 'firebase/firestore'; // Import Firestore functions
 import { onAuthStateChanged } from 'firebase/auth'; // Import auth functions
 import '@fortawesome/fontawesome-free/css/all.min.css';
+import { setupSecurityHeaders } from './utils/securityHeaders';
+import { setupErrorHandling } from './utils/errorHandling';
+import { setupRequestLogging } from './utils/requestLogging';
+
+// Initialize security features
+setupSecurityHeaders();
+setupErrorHandling();
+setupRequestLogging();
 
 let app;
 
-// Check if the user is logged in and email is verified
+// Enhanced authentication state management
 onAuthStateChanged(auth, async (user) => {
-  if (user) {
-    if (user.emailVerified) {
-      const userDocRef = doc(db, 'users', user.uid); // Use doc() for Firestore v9
-      try {
-        await updateDoc(userDocRef, { isVerified: true });
-        console.log('User email is verified, updated Firestore');
-      } catch (error) {
-        console.error('Error updating Firestore:', error);
+  try {
+    if (user) {
+      if (user.emailVerified) {
+        const userDocRef = doc(db, 'users', user.uid);
+        const userDoc = await getDoc(userDocRef);
+        
+        if (userDoc.exists()) {
+          await updateDoc(userDocRef, { 
+            isVerified: true,
+            lastLogin: new Date().toISOString(),
+            loginCount: (userDoc.data().loginCount || 0) + 1
+          });
+          console.log('User session updated successfully');
+        }
       }
+
+      // Enhanced user role management
+      await store.dispatch('fetchUserRole', user.uid);
+      store.commit('SET_USER', {
+        ...user,
+        lastActive: new Date().toISOString()
+      });
+    } else {
+      store.commit('SET_USER', null);
+      store.commit('SET_ROLE', null);
     }
 
-    // Fetch the user's role and set it in the store
-    await store.dispatch('fetchUserRole', user.uid);
-    store.commit('SET_USER', user);
-  } else {
-    store.commit('SET_USER', null);
-    store.commit('SET_ROLE', null);
-  }
-
-  if (!app) {
-    app = createApp(App)
-      .use(store)
-      .use(router)
-      .mount('#app');
+    if (!app) {
+      app = createApp(App)
+        .use(store)
+        .use(router)
+        .mount('#app');
+    }
+  } catch (error) {
+    console.error('Authentication error:', error);
+    // Handle authentication errors appropriately
+    store.commit('SET_ERROR', {
+      message: 'Authentication failed. Please try again.',
+      code: error.code
+    });
   }
 });
