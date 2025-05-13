@@ -90,7 +90,7 @@
   </div>
 </template>
 
-<script>
+<script setup>
 import { auth, db } from '../firebase/firebaseConfig';
 import { createUserWithEmailAndPassword, sendEmailVerification } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
@@ -114,86 +114,83 @@ const orientalMindoroData = {
   "Victoria": ["Alcate", "Antipolo", "Bacungan", "Bagong Buhay", "Bambanin", "Bethel", "Canaan", "Concepcion", "Duongan", "Loyal", "Mabini", "Macatoc", "Malabo", "Mercedes", "Ogbot", "Orion", "San Antonio", "San Cristobal", "San Gabriel", "San Gelacio", "San Isidro", "San Juan", "San Narciso", "Urdaneta"]
 };
 
-export default {
-  data() {
-    return {
-      firstName: '',
-      lastName: '',
-      username: '',
-      email: '',
-      contactNumber: '',
-      selectedProvince: 'Oriental Mindoro',
-      selectedMunicipality: '',
-      selectedBarangay: '',
-      municipalities: Object.keys(orientalMindoroData),
-      barangays: [],
-      role: 'customer',
-      password: '',
-      confirmPassword: '',
-      showPassword: false,
-      showConfirmPassword: false,
-      alertMessage: '',
-      alertType: ''
-    };
-  },
-  methods: {
-    togglePassword() {
-      this.showPassword = !this.showPassword;
-    },
-    toggleConfirmPassword() {
-      this.showConfirmPassword = !this.showConfirmPassword;
-    },
-    updateBarangays() {
-      this.barangays = orientalMindoroData[this.selectedMunicipality] || [];
-      this.selectedBarangay = '';
-    },
-    showAlert(message, type) {
-      this.alertMessage = message;
-      this.alertType = type;
-      setTimeout(() => {
-        this.alertMessage = '';
-      }, 3000);
-    },
-    async register() {
-      if (this.password !== this.confirmPassword) {
-        this.showAlert('Passwords do not match!', 'error');
-        return;
-      }
-      if (!this.firstName || !this.lastName || !this.username || !this.email || !this.contactNumber || !this.selectedMunicipality || !this.selectedBarangay) {
-        this.showAlert('Please fill out all fields.', 'error');
-        return;
-      }
+const firstName = ref('');
+const lastName = ref('');
+const username = ref('');
+const email = ref('');
+const contactNumber = ref('');
+const selectedProvince = ref('Oriental Mindoro');
+const selectedMunicipality = ref('');
+const selectedBarangay = ref('');
+const municipalities = Object.keys(orientalMindoroData);
+const barangays = ref([]);
+const role = ref('customer');
+const password = ref('');
+const confirmPassword = ref('');
+const showPassword = ref(false);
+const showConfirmPassword = ref(false);
+const alertMessage = ref('');
+const alertType = ref('');
 
-      try {
-        const userCredential = await createUserWithEmailAndPassword(auth, this.email, this.password);
-        const user = userCredential.user;
-        await sendEmailVerification(user);
-        this.showAlert('Verification email sent! Please check your inbox.', 'success');
+const togglePassword = () => {
+  showPassword.value = !showPassword.value;
+};
 
-        await setDoc(doc(db, 'users', user.uid), {
-          userId: user.uid,
-          firstName: this.firstName,
-          lastName: this.lastName,
-          username: this.username,
-          email: this.email,
-          contactNumber: this.contactNumber,
-          address: `${this.selectedBarangay}, ${this.selectedMunicipality}, Oriental Mindoro`,
-          province: 'Oriental Mindoro',
-          municipality: this.selectedMunicipality,
-          barangay: this.selectedBarangay,
-          role: this.role,
-          isVerified: false,
-          isSeller: false 
-        });
+const toggleConfirmPassword = () => {
+  showConfirmPassword.value = !showConfirmPassword.value;
+};
 
-        setTimeout(() => {
-          this.$router.push('/login');
-        }, 2000);
-      } catch (error) {
-        console.error('Error during registration:', error);
-        this.showAlert('Registration failed! Check console for details.', 'error');
-      }
-    }
+const updateBarangays = () => {
+  barangays.value = orientalMindoroData[selectedMunicipality.value] || [];
+  selectedBarangay.value = '';
+};
+
+const showAlert = (message, type) => {
+  alertMessage.value = message;
+  alertType.value = type;
+  setTimeout(() => {
+    alertMessage.value = '';
+  }, 3000);
+};
+
+const register = async () => {
+  if (password.value !== confirmPassword.value) {
+    showAlert('Passwords do not match!', 'error');
+    return;
+  }
+  if (!firstName.value || !lastName.value || !username.value || !email.value || !contactNumber.value || !selectedMunicipality.value || !selectedBarangay.value) {
+    showAlert('Please fill out all fields.', 'error');
+    return;
+  }
+
+  try {
+    const userCredential = await createUserWithEmailAndPassword(auth, email.value, password.value);
+    const user = userCredential.user;
+    await sendEmailVerification(user);
+    showAlert('Verification email sent! Please check your inbox.', 'success');
+
+    await setDoc(doc(db, 'users', user.uid), {
+      userId: user.uid,
+      firstName: firstName.value,
+      lastName: lastName.value,
+      username: username.value,
+      email: email.value,
+      contactNumber: contactNumber.value,
+      address: `${selectedBarangay.value}, ${selectedMunicipality.value}, Oriental Mindoro`,
+      province: 'Oriental Mindoro',
+      municipality: selectedMunicipality.value,
+      barangay: selectedBarangay.value,
+      role: role.value,
+      isVerified: false,
+      isSeller: false 
+    });
+
+    setTimeout(() => {
+      router.push('/login');
+    }, 2000);
+  } catch (error) {
+    console.error('Error during registration:', error);
+    showAlert('Registration failed! Check console for details.', 'error');
   }
 };
 </script>

@@ -10,20 +10,19 @@
     </div>
 </template>
 
-<script>
-export default {
-    props: {
-        isVisible: Boolean,
-    },
-    emits: ['confirm', 'cancel'],
-    methods: {
-        confirmDelete() {
-            this.$emit('confirm');
-        },
-        cancelDelete() {
-            this.$emit('cancel');
-        },
-    },
+<script setup>
+defineProps({
+    isVisible: Boolean,
+});
+
+const emit = defineEmits(['confirm', 'cancel']);
+
+const confirmDelete = () => {
+    emit('confirm');
+};
+
+const cancelDelete = () => {
+    emit('cancel');
 };
 </script>
 

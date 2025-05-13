@@ -279,6 +279,10 @@ import { db } from '@/firebase/firebaseConfig';
 import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 
+defineOptions({
+  name: 'OrderManagement'
+});
+
 // UI State
 const isDarkMode = ref(false);
 const searchQuery = ref('');

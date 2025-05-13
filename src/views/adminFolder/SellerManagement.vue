@@ -159,6 +159,10 @@ const updateRegistrationStatus = async (seller) => {
 };
 
 onMounted(fetchSellers);
+
+defineOptions({
+  name: 'SellerManagement'
+});
 </script>
 
 <style scoped>

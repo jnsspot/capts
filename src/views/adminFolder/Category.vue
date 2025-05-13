@@ -56,7 +56,7 @@ import { db } from '../../firebase/firebaseConfig';
 import { collection, onSnapshot } from 'firebase/firestore';
 
 export default {
-    name: "Category",
+    name: 'CategoryManagement',
     setup() {
         const categories = ref([]);
 

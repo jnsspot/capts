@@ -376,7 +376,7 @@ import {
 import { db, auth } from '@/firebase/firebaseConfig';
 import Notification from '@/components/Notification.vue';
 
-// Oriental Mindoro data from Register.vue
+// Oriental Mindoro data from UserRegister.vue
 const orientalMindoroData = {
   "Baco": ["Alag", "Bangkatan", "Burbuli", "Catwiran I", "Catwiran II", "Dulangan I", "Dulangan II", "Lumangbayan", "Malapad", "Mangangan I", "Mangangan II", "Mayabig", "Pambisan", "Poblacion", "Pulang-Tubig", "Putican-Cabulo", "San Andres", "San Ignacio", "Santa Cruz", "Santa Rosa I", "Santa Rosa II", "Tabon-Tabon", "Tagumpay", "Water"],
   "Bansud": ["Alcate", "Bato", "Buenavista", "Burgos", "Cambunang", "Canaan", "Daguit", "Marfrancisco", "Pag-asa", "Poblacion", "Proper Bansud", "Proper Tiguisan", "Rosacara", "Salcedo", "Sumagui", "Villa Pag-asa"],
@@ -396,6 +396,7 @@ const orientalMindoroData = {
 };
 
 export default {
+  name: 'CheckoutPage',
   components: {
     ChevronLeft,
     MapPin,
@@ -430,12 +431,16 @@ export default {
     
     // Initialize order data
     const orderItems = ref([]);
+    const isBuyNow = ref(false);
     
     // Parse items from route query
     onMounted(() => {
       try {
         if (route.query.items) {
-          orderItems.value = JSON.parse(route.query.items);
+          const items = JSON.parse(route.query.items);
+          orderItems.value = items;
+          // Check if this is a buy now order
+          isBuyNow.value = items[0]?.isBuyNow || false;
         }
       } catch (error) {
         console.error('Error parsing order items:', error);
@@ -611,13 +616,13 @@ export default {
 
     // Show notification function
     const showNotificationMessage = (message, type = 'success') => {
-      notificationMessage.value = message;
-      notificationType.value = type;
-      showNotification.value = true;
-      
       if (notificationTimeout) {
         clearTimeout(notificationTimeout);
       }
+      
+      notificationMessage.value = message;
+      notificationType.value = type;
+      showNotification.value = true;
       
       notificationTimeout = setTimeout(() => {
         showNotification.value = false;
@@ -711,6 +716,7 @@ export default {
               createdAt: serverTimestamp(),
               userId: auth.currentUser.uid,
               username: (await getDoc(doc(db, 'users', auth.currentUser.uid))).data().username || '',
+              isBuyNow: isBuyNow.value
             });
 
             // Save to sales collection
@@ -724,14 +730,17 @@ export default {
               timestamp: serverTimestamp(),
               sellerId: item.sellerId,
               season: getCurrentSeason(),
-              orderCode: orderCode
+              orderCode: orderCode,
+              isBuyNow: isBuyNow.value
             };
 
             const saleRef = await addDoc(collection(db, 'sales'), saleData);
 
-            // Remove item from cart
-            const cartItemRef = doc(db, 'carts', item.id);
-            await deleteDoc(cartItemRef);
+            // Only remove from cart if it's not a buy now order
+            if (!isBuyNow.value && item.id) {
+              const cartItemRef = doc(db, 'carts', item.id);
+              await deleteDoc(cartItemRef);
+            }
           });
         }
         
@@ -768,6 +777,7 @@ export default {
     
     return {
       orderItems,
+      isBuyNow,
       subtotal,
       deliveryFee,
       tax,

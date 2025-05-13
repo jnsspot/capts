@@ -354,17 +354,24 @@ export default {
     
     handleBuyNowConfirm(data) {
       this.closeBuyNowModal();
+      // For Buy Now, we pass a single item directly to checkout
+      const buyNowItem = {
+        productId: this.productId,
+        productName: this.productName,
+        productImage: this.productImage,
+        weight: data.weight,
+        packagingType: data.packagingType,
+        price: this.productPrice,
+        totalPrice: this.productPrice * data.weight,
+        sellerId: this.product.sellerId,
+        farmName: this.farmName,
+        isBuyNow: true // Flag to indicate this is a buy now order
+      };
+
       this.router.push({
         name: 'Checkout',
         query: {
-          productId: this.productId,
-          productName: this.productName,
-          productImage: this.productImage,
-          weight: data.weight,
-          packagingType: data.packagingType,
-          totalPrice: data.totalPrice,
-          sellerId: data.sellerId,
-          pricePerKg: this.productPrice
+          items: JSON.stringify([buyNowItem])
         }
       });
     },

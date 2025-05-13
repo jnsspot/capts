@@ -84,7 +84,7 @@
   </template>
   
   <script setup>
-  import { ref, computed } from 'vue';
+  import { ref, computed, defineProps } from 'vue';
   import { ChevronDown, ChevronRight } from 'lucide-vue-next';
   
   const props = defineProps({

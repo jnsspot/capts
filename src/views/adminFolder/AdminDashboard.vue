@@ -54,130 +54,126 @@
   </div>
 </template>
 
-<script>
+<script setup>
 import { onMounted, ref } from 'vue';
 import { getFirestore, collection, onSnapshot } from 'firebase/firestore';
 import { Chart, registerables } from 'chart.js';
 
-export default {
-  setup() {
-    const lineChart = ref(null);
-    const db = getFirestore();
-    let chartInstance = null;
+const lineChart = ref(null);
+const db = getFirestore();
+let chartInstance = null;
 
-    // Register Chart.js components
-    Chart.register(...registerables);
+// Register Chart.js components
+Chart.register(...registerables);
 
-    // Fetch data from Firestore and update the chart
-    const fetchData = () => {
-      const customersData = [];
-      const sellersData = [];
-      const labels = [];
+// Fetch data from Firestore and update the chart
+const fetchData = () => {
+  const customersData = [];
+  const sellersData = [];
+  const labels = [];
 
-      // Fetch customers data
-      onSnapshot(collection(db, 'users'), (snapshot) => {
-        customersData.push(snapshot.size);
-        labels.push(new Date().toLocaleDateString());
-        updateChart();
-      });
+  // Fetch customers data
+  onSnapshot(collection(db, 'users'), (snapshot) => {
+    customersData.push(snapshot.size);
+    labels.push(new Date().toLocaleDateString());
+    updateChart();
+  });
 
-      // Fetch sellers data
-      onSnapshot(collection(db, 'sellers'), (snapshot) => {
-        sellersData.push(snapshot.size);
-        updateChart();
-      });
+  // Fetch sellers data
+  onSnapshot(collection(db, 'sellers'), (snapshot) => {
+    sellersData.push(snapshot.size);
+    updateChart();
+  });
 
-      // Update the chart with new data
-      const updateChart = () => {
-        if (chartInstance) {
-          chartInstance.destroy();
-        }
+  // Update the chart with new data
+  const updateChart = () => {
+    if (chartInstance) {
+      chartInstance.destroy();
+    }
 
-        const ctx = lineChart.value.getContext('2d');
-        chartInstance = new Chart(ctx, {
-          type: 'line',
-          data: {
-            labels: labels,
-            datasets: [
-              {
-                label: 'Customers',
-                data: customersData,
-                borderColor: 'rgba(75, 192, 192, 1)',
-                fill: false,
-              },
-              {
-                label: 'Sellers',
-                data: sellersData,
-                borderColor: 'rgba(153, 102, 255, 1)',
-                fill: false,
-              },
-            ],
+    const ctx = lineChart.value.getContext('2d');
+    chartInstance = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: labels,
+        datasets: [
+          {
+            label: 'Customers',
+            data: customersData,
+            borderColor: 'rgba(75, 192, 192, 1)',
+            fill: false,
           },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-              x: {
-                display: true,
-                title: {
-                  display: true,
-                  text: 'Date',
-                },
-              },
-              y: {
-                display: true,
-                title: {
-                  display: true,
-                  text: 'Number of Users',
-                },
-                beginAtZero: true,
-              },
+          {
+            label: 'Sellers',
+            data: sellersData,
+            borderColor: 'rgba(153, 102, 255, 1)',
+            fill: false,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          x: {
+            display: true,
+            title: {
+              display: true,
+              text: 'Date',
             },
           },
-        });
-      };
-    };
-
-    onMounted(() => {
-      fetchData();
+          y: {
+            display: true,
+            title: {
+              display: true,
+              text: 'Number of Users',
+            },
+            beginAtZero: true,
+          },
+        },
+      },
     });
-
-    return {
-      lineChart,
-    };
-  },
-  data() {
-    return {
-      isCollapsed: window.innerWidth < 768,
-    };
-  },
-  methods: {
-    toggleSidebar() {
-      this.isCollapsed = !this.isCollapsed;
-    },
-    navigate(page) {
-      this.$router.push(`/${page}`);
-      if (window.innerWidth < 768) this.isCollapsed = true;
-    },
-    goToCustomerPage() {
-      this.$router.push('/admin-customer');
-    },
-    goToHomePage() {
-      this.$router.push('/admin-dashboard');
-    },
-    goToSellerPage() {
-      this.$router.push('/admin-seller');
-    },
-    goToCategoryPage() {
-      this.$router.push('/category'); // Navigate to the category page
-    },
-  },
-  mounted() {
-    window.addEventListener('resize', () => {
-      this.isCollapsed = window.innerWidth < 768;
-    });
-  },
+  };
 };
+
+onMounted(() => {
+  fetchData();
+});
+
+const isCollapsed = ref(window.innerWidth < 768);
+
+const toggleSidebar = () => {
+  isCollapsed.value = !isCollapsed.value;
+};
+
+const navigate = (page) => {
+  if (window.innerWidth < 768) isCollapsed.value = true;
+  if (page === 'admin') {
+    // Implement admin navigation
+  } else {
+    // Implement other navigation
+  }
+};
+
+const goToCustomerPage = () => {
+  navigate('customer');
+};
+
+const goToHomePage = () => {
+  navigate('dashboard');
+};
+
+const goToSellerPage = () => {
+  navigate('seller');
+};
+
+const goToCategoryPage = () => {
+  navigate('category');
+};
+
+window.addEventListener('resize', () => {
+  isCollapsed.value = window.innerWidth < 768;
+});
 </script>
 
 <style scoped>

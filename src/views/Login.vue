@@ -38,9 +38,10 @@
 <script>
 import { auth, db } from '../firebase/firebaseConfig';
 import { signInWithEmailAndPassword } from 'firebase/auth';
-import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 
 export default {
+  name: 'LoginPage',
   data() {
     return {
       email: '',
@@ -62,7 +63,6 @@ export default {
         }
 
         let userData = null;
-        let collectionName = '';
 
         // Check if user is an admin
         const adminQuery = query(collection(db, 'admins'), where('email', '==', this.email), where('role', '==', 'admin'));
@@ -70,7 +70,6 @@ export default {
 
         if (!adminSnapshot.empty) {
           userData = adminSnapshot.docs[0].data();
-          collectionName = 'admins';
         } else {
           // Check if user is a customer or seller in the 'users' collection
           const userQuery = query(collection(db, 'users'), where('email', '==', this.email));
@@ -78,7 +77,6 @@ export default {
 
           if (!userSnapshot.empty) {
             userData = userSnapshot.docs[0].data();
-            collectionName = 'users';
           }
         }
 

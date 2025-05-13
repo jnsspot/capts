@@ -243,18 +243,17 @@
   <script setup>
   import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue';
   import { 
-    Search, 
     Filter, 
+    Search, 
     MessageSquare, 
-    MoreVertical, 
     Phone, 
-    UserPlus, 
+    MoreVertical, 
+    CheckCheck, 
+    ShoppingBag, 
     Paperclip, 
     Image, 
     Tag, 
-    Send, 
-    CheckCheck,
-    ShoppingBag
+    Send
   } from 'lucide-vue-next';
   import Sidebar from '@/components/Sidebar.vue';
   import { db } from '@/firebase/firebaseConfig';
@@ -269,8 +268,7 @@
     updateDoc, 
     serverTimestamp, 
     getDoc,
-    writeBatch,
-    deleteDoc
+    writeBatch
   } from 'firebase/firestore';
   import { getAuth } from 'firebase/auth';
   

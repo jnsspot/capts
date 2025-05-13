@@ -60,7 +60,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onBeforeUnmount } from 'vue';
+import { ref, onMounted, onBeforeUnmount, defineProps } from 'vue';
 import { 
   LayoutDashboard, 
   Sprout, 
@@ -77,6 +77,7 @@ import {
   Calendar,
   FileText
 } from 'lucide-vue-next';
+import { useRoute } from 'vue-router';
 
 const props = defineProps({
   initialActiveItem: {
@@ -101,13 +102,14 @@ const checkScreenSize = () => {
 
 const menuItems = [
   { name: 'Dashboard', path: '/seller-dashboard', icon: LayoutDashboard },
-  { name: 'Farm Products', path: '/products', icon: Sprout },
+  { name: 'Farm Products', path: '/seller/products', icon: Sprout },
   { name: 'Forecasting', path: '/seller/forecasting', icon: TrendingUp },
+  { name: 'Crop Forecasting', path: '/seller/crop-forecasting', icon: TrendingUp },
   { name: 'Harvest Calendar', path: '/harvest-calendar', icon: Calendar },
   { name: 'Customers', path: '/customers', icon: Users },
   { name: 'Analytics', path: '/seller/analytics', icon: BarChart },
   { name: 'Orders', path: '/orders', icon: Receipt },
-  { name: 'Chat', path: 'seller/chat', icon: MessageSquare, badge: 8 },
+  { name: 'Chat', path: '/seller/chat', icon: MessageSquare, badge: 8 },
   { name: 'Feedback', path: '/feedback', icon: ThumbsUp },
   { name: 'Reports', path: '/reports', icon: FileText },
   { name: 'Help', path: '/sellerhelp', icon: HelpCircle },
@@ -156,6 +158,10 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', checkScreenSize);
+});
+
+defineOptions({
+  name: 'AdminSidebar'
 });
 </script>
 

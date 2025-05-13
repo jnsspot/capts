@@ -17,7 +17,7 @@
   
   <script setup>
   import { ref } from 'vue';
-  import { recordSale } from '@/utils/salesRecorder';
+  import { recordSale as recordSaleToDB } from '@/utils/salesRecorder';
   
   const props = defineProps({
     products: Array
@@ -35,7 +35,7 @@
     if (!selectedProduct.value || quantity.value < 1) return;
     
     try {
-      await recordSale({
+      await recordSaleToDB({
         productId: selectedProduct.value.id,
         productName: selectedProduct.value.name,
         category: selectedProduct.value.category,

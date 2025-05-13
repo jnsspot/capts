@@ -77,9 +77,10 @@
 import { auth, db } from "../../firebase/firebaseConfig";
 import { signOut } from "firebase/auth";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { ref, uploadBytes, getDownloadURL, getStorage } from "firebase/storage";
 
 export default {
+  name: 'UserProfile',
   data() {
     return {
       name: "Loading...",
@@ -114,7 +115,7 @@ export default {
       const file = event.target.files[0];
       if (!file) return;
 
-      const storageRef = ref(storage, `profilePictures/${user.uid}`);
+      const storageRef = ref(getStorage(), `profilePictures/${user.uid}`);
       try {
         await uploadBytes(storageRef, file);
         const downloadURL = await getDownloadURL(storageRef);

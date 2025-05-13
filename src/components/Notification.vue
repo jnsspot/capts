@@ -6,17 +6,15 @@
     </transition>
   </template>
   
-  <script>
-  export default {
-    props: {
-      message: String,
-      type: {
-        type: String,
-        default: 'success'
-      },
-      visible: Boolean
-    }
-  }
+  <script setup>
+  defineProps({
+    message: String,
+    type: {
+      type: String,
+      default: 'success'
+    },
+    visible: Boolean
+  });
   </script>
   
   <style scoped>

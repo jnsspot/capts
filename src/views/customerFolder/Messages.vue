@@ -212,6 +212,7 @@ import {
 import { db, auth } from "@/firebase/firebaseConfig";
 
 export default {
+  name: 'MessagesPage',
   components: {
     ChevronLeft,
     Search,

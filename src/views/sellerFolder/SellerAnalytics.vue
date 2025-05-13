@@ -406,6 +406,11 @@
     return result;
   });
   
+  // Update totalItems when filteredProducts changes
+  watch(filteredProducts, (newValue) => {
+    totalItems.value = newValue.length;
+  }, { immediate: true });
+  
   const paginatedProducts = computed(() => {
     const startIndex = (currentPage.value - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
@@ -795,6 +800,10 @@
         }, 100);
       }
     });
+  });
+  
+  defineOptions({
+    name: 'SellerAnalytics'
   });
   </script>
 

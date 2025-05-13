@@ -442,7 +442,7 @@ const saveProduct = async () => {
 
 const cancelEdit = () => {
   showNotification('Cancelled editing. Changes were not saved.', 'warning');
-  setTimeout(() => router.push('/products'), 1500);
+  setTimeout(() => router.push('/seller/products'), 1500);
 };
 
 onMounted(() => {

@@ -51,6 +51,10 @@
     { id: 'P005', name: 'Free-range Eggs', category: 'Dairy', price: 5.99, stock: 0, status: 'Out of Stock', image: 'https://source.unsplash.com/featured/?eggs' },
     { id: 'P006', name: 'Fresh Spinach', category: 'Vegetables', price: 2.49, stock: 300, status: 'Active', image: 'https://source.unsplash.com/featured/?spinach' },
   ]);
+  
+  defineOptions({
+    name: 'ProductManagement'
+  });
   </script>
   
   <style scoped>

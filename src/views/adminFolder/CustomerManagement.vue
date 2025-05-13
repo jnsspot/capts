@@ -118,6 +118,10 @@ const editCustomer = (customer) => {
 };
 
 onMounted(fetchCustomers);
+
+defineOptions({
+  name: 'CustomerManagement'
+});
 </script>
 
 <style scoped>

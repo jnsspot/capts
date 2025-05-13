@@ -1,6 +1,6 @@
 import { createStore } from 'vuex';
 import { auth, db } from '../firebase/firebaseConfig'; // Import auth and db
-import { collection, doc, getDoc } from 'firebase/firestore'; // Import Firestore functions
+import { doc, getDoc } from 'firebase/firestore'; // Import Firestore functions
 
 export default createStore({
   state: {

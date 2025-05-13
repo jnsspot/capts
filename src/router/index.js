@@ -2,7 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router';
 import store from '../store'; // Import the store
 
 // Import all your components
-import Register from '../views/Register.vue';
+import UserRegister from '../views/UserRegister.vue';
 import Login from '../views/Login.vue';
 import ResetPassword from '../views/ResetPassword.vue';
 import ChangePassword from '../views/ChangePassword.vue';
@@ -15,10 +15,10 @@ import AdminSeller from '../views/adminFolder/AdminSeller.vue';
 import AdminCustomer from '../views/adminFolder/AdminCustomer.vue';
 import AdminRegister from '../views/adminFolder/AdminRegister.vue';
 import AdminDashboard from '../views/adminFolder/AdminDashboard.vue';
-import Dashboard from '../views/adminFolder/Dashboard.vue'; 
-import Sellers from '../views/adminFolder/Sellers.vue';
-import Customers from '../views/adminFolder/Customers.vue';
-import Products from '../views/adminFolder/Products.vue';
+import DashboardAdmin from '../views/adminFolder/DashboardAdmin.vue'; 
+import SellerManagement from '../views/adminFolder/SellerManagement.vue';
+import CustomerManagement from '../views/adminFolder/CustomerManagement.vue';
+import ProductManagement from '../views/adminFolder/ProductManagement.vue';
 import ProductCategories from '../views/adminFolder/ProductCategories.vue';
 import SellerDetails from '../views/adminFolder/SellerDetails.vue';
 // New Admin components from the other code
@@ -37,22 +37,21 @@ import Checkout from '@/views/customerFolder/Checkout.vue';
 import Messages from '../views/customerFolder/Messages.vue';
 
 // Seller components
-import ProductManagement from '../views/sellerFolder/ProductManagement.vue';
+import SellerProductManagement from '../views/sellerFolder/ProductManagement.vue';
 import SellerDashboard from '../views/sellerFolder/SellerDashboard.vue';
 import ProductCategory from '../views/sellerFolder/ProductCategory.vue';
 import RegisterSeller from '../views/sellerFolder/RegisterSeller.vue';
 import AddEditProduct from '@/views/sellerFolder/AddEditProduct.vue';
-import Chat from '@/views/sellerFolder/Chat.vue';
-import Orders from '../views/sellerFolder/Orders.vue';
+import SellerChat from '@/views/sellerFolder/SellerChat.vue';
+import OrderManagement from '../views/sellerFolder/OrderManagement.vue';
 // New Seller components from the other code
 import SellerHome from '@/views/sellerFolder/SellerHome.vue';
 import SellerEditProfile from '@/views/sellerFolder/SellerEditProfile.vue';
-import SellerChat from '@/views/sellerFolder/SellerChat.vue';
-import Forecasting from '@/views/sellerFolder/Forecasting.vue';
 import CropForecasting from '@/views/sellerFolder/CropForecasting.vue';
 import CustomersTable from '@/views/sellerFolder/CustomersTable.vue';
-import Analytics from '@/views/sellerFolder/Analytics.vue';
+import SellerAnalytics from '@/views/sellerFolder/SellerAnalytics.vue';
 import HarvestCalendarPage from '@/views/sellerFolder/HarvestCalendarPage.vue';
+import Forecasting from '@/views/sellerFolder/Forecasting.vue';
 
 const routes = [
   // Your existing routes (unchanged)
@@ -85,12 +84,12 @@ const routes = [
   {
     path: '/chat',
     name: 'Chat',
-    component: Chat
+    component: SellerChat
   },
   {
     path: '/orders',
     name: 'Orders',
-    component: Orders
+    component: OrderManagement
   },
   {
     path: '/edit-product/:productId',
@@ -104,18 +103,18 @@ const routes = [
   },
   {
     path: '/admin',
-    name: 'Dashboard',
-    component: Dashboard
+    name: 'DashboardAdmin',
+    component: DashboardAdmin
   },
   {
     path: '/admin/sellers',
-    name: 'Sellers',
-    component: Sellers
+    name: 'SellerManagement',
+    component: SellerManagement
   },
   {
     path: '/admin/customers',
-    name: 'Customers',
-    component: Customers
+    name: 'CustomerManagement',
+    component: CustomerManagement
   },
   {
     path: '/admin/categories',
@@ -124,8 +123,8 @@ const routes = [
   },
   {
     path: '/admin/products',
-    name: 'Products',
-    component: Products
+    name: 'ProductManagement',
+    component: ProductManagement
   },
   {
     path: '/admin/sellers/:id',
@@ -139,11 +138,10 @@ const routes = [
     meta: { requiresAuth: false },
   },
   {
-    path: '/product/:productId', // Your dynamic route (unchanged)
+    path: '/product/:productId',
     component: ProductDetails,
-    props: true // Your props: true (unchanged)
+    props: true
   },
-  
   {
     path: '/',
     name: 'homeview',
@@ -159,7 +157,7 @@ const routes = [
   {
     path: '/registration',
     name: 'registration',
-    component: Register,
+    component: UserRegister,
     meta: { requiresAuth: false },
   },
   {
@@ -194,7 +192,7 @@ const routes = [
   },
   {
     path: '/admin-customer',
-    name: 'AdminCcustomer',
+    name: 'AdminCustomer',
     component: AdminCustomer,
     meta: { requiresAuth: true, allowedRoles: ['admin'] },
   },
@@ -276,6 +274,12 @@ const routes = [
     meta: { requiresAuth: true, allowedRoles: ['admin'] },
   },
   {
+    path: '/seller/crop-forecasting',
+    name: 'cropforecasting',
+    component: CropForecasting,
+    meta: { requiresAuth: true, allowedRoles: ['seller'] },
+  },
+  {
     path: '/seller/forecasting',
     name: 'forecasting',
     component: Forecasting,
@@ -314,7 +318,7 @@ const routes = [
   {
     path: '/seller/analytics',
     name: 'analytics',
-    component: Analytics,
+    component: SellerAnalytics,
     meta: { requiresAuth: true, allowedRoles: ['seller'] },
   },
   {
@@ -322,6 +326,11 @@ const routes = [
     name: 'customerorders',
     component: CustomerOrders,
     meta: { requiresAuth: true, allowedRoles: ['customer'] },
+  },
+  {
+    path: '/seller/products',
+    name: 'SellerProductManagement',
+    component: SellerProductManagement
   }
 ];
 

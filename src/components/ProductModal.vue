@@ -22,9 +22,11 @@
             min="0.1" 
             max="20" 
             step="0.1" 
-            @input="updatePrice"
+            @input="validateWeight"
             class="form-input"
+            :class="{ 'error': weightError }"
           >
+          <span v-if="weightError" class="error-message">{{ weightError }}</span>
         </div>
 
         <div class="form-group">
@@ -38,7 +40,11 @@
 
         <div class="price-summary">
           <div class="price-row">
-            <span>Price:</span>
+            <span>Price per kg:</span>
+            <span class="price-value">₱{{ pricePerKg }}</span>
+          </div>
+          <div class="price-row">
+            <span>Total Price:</span>
             <span class="price-value">₱{{ computedPrice }}</span>
           </div>
         </div>
@@ -46,57 +52,78 @@
 
       <div class="modal-footer">
         <button class="btn btn-secondary" @click="close">Cancel</button>
-        <button class="btn btn-primary" @click="confirm">Confirm</button>
+        <button 
+          class="btn btn-primary" 
+          @click="confirm" 
+          :disabled="!isValid"
+        >
+          Confirm
+        </button>
       </div>
     </div>
   </div>
 </template>
 
-<script>
-export default {
-  props: {
-    visible: Boolean,
-    productName: String,
-    productImage: String,
-    category: String,
-    initialPackagingType: String,
-    initialWeight: Number,
-    pricePerKg: Number,
-    sellerId: String, // Ensure sellerId is included
-    userId: String,
-    username: String
+<script setup>
+import { ref, computed } from 'vue';
+
+const props = defineProps({
+  visible: Boolean,
+  productName: String,
+  productImage: String,
+  category: String,
+  pricePerKg: {
+    type: Number,
+    required: true
   },
-  data() {
-    return {
-      packagingType: this.initialPackagingType,
-      weight: this.initialWeight,
-      computedPrice: this.pricePerKg * this.initialWeight
-    };
+  initialWeight: {
+    type: Number,
+    default: 1
   },
-  methods: {
-   
-    updatePrice() {
-      if (this.weight > 20) {
-        alert('Maximum weight is 20 kg.');
-        this.weight = 20;
-      }
-      this.computedPrice = this.pricePerKg * this.weight;
-    },
-    confirm() {
-      this.$emit('confirm', {
-        weight: this.weight,
-        packagingType: this.packagingType,
-        totalPrice: this.computedPrice,
-        sellerId: this.sellerId, // Include sellerId in the emitted data
-        userId: this.userId,
-        username: this.username
-      });
-      this.close();
-    },
-    close() {
-      this.$emit('close');
-    }
+  initialPackagingType: {
+    type: String,
+    default: 'plastic'
   }
+});
+
+const emit = defineEmits(['close', 'confirm']);
+
+const weight = ref(props.initialWeight);
+const packagingType = ref(props.initialPackagingType);
+const weightError = ref('');
+
+const computedPrice = computed(() => {
+  return (weight.value * props.pricePerKg).toFixed(2);
+});
+
+const isValid = computed(() => {
+  return weight.value > 0 && weight.value <= 20 && !weightError.value;
+});
+
+const validateWeight = () => {
+  if (weight.value <= 0) {
+    weightError.value = 'Weight must be greater than 0';
+  } else if (weight.value > 20) {
+    weightError.value = 'Weight cannot exceed 20 kg';
+  } else {
+    weightError.value = '';
+  }
+};
+
+const close = () => {
+  emit('close');
+};
+
+const confirm = () => {
+  if (!isValid.value) return;
+  
+  emit('confirm', {
+    weight: weight.value,
+    packagingType: packagingType.value,
+    totalPrice: parseFloat(computedPrice.value)
+  });
+  
+  close();
 };
 </script>
 
@@ -105,144 +132,157 @@ export default {
   position: fixed;
   top: 0;
   left: 0;
-  right: 0;
-  bottom: 0;
+  width: 100%;
+  height: 100%;
   background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
   z-index: 1000;
 }
 
 .modal-content {
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
   background-color: white;
   border-radius: 12px;
   width: 90%;
-  max-width: 400px;
+  max-width: 500px;
+  max-height: 90vh;
+  overflow-y: auto;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-  overflow: hidden;
-  z-index: 1001;
 }
 
 .modal-header {
-  padding: 20px 20px 0;
+  padding: 20px;
+  border-bottom: 1px solid #eee;
   text-align: center;
 }
 
 .modal-title {
-  font-size: 1.2rem;
-  font-weight: 600;
+  margin: 0 0 15px 0;
   color: #2e5c31;
-  margin-bottom: 15px;
+  font-size: 1.2rem;
 }
 
 .product-image {
-  width: 120px;
-  height: 120px;
+  width: 100%;
+  max-height: 200px;
   object-fit: contain;
   border-radius: 8px;
-  margin: 0 auto 15px;
-  display: block;
 }
 
 .modal-body {
-  padding: 0 20px;
+  padding: 20px;
 }
 
 .detail-row {
   display: flex;
   justify-content: space-between;
-  padding: 8px 0;
-  border-bottom: 1px solid #f0f0f0;
-}
-
-.detail-label {
+  margin-bottom: 20px;
   color: #666;
-  font-size: 0.9rem;
-}
-
-.detail-value {
-  font-weight: 500;
 }
 
 .form-group {
-  margin: 15px 0;
+  margin-bottom: 20px;
 }
 
 .form-label {
   display: block;
-  margin-bottom: 6px;
-  font-size: 0.9rem;
-  color: #555;
+  margin-bottom: 8px;
+  color: #333;
+  font-weight: 500;
 }
 
-.form-input, .form-select {
+.form-input,
+.form-select {
   width: 100%;
-  padding: 10px 12px;
+  padding: 10px;
   border: 1px solid #ddd;
-  border-radius: 8px;
+  border-radius: 6px;
   font-size: 1rem;
-  transition: border-color 0.2s;
 }
 
-.form-input:focus, .form-select:focus {
-  border-color: #2e5c31;
-  outline: none;
+.form-input.error {
+  border-color: #e53e3e;
+}
+
+.error-message {
+  color: #e53e3e;
+  font-size: 0.85rem;
+  margin-top: 4px;
+  display: block;
 }
 
 .price-summary {
-  margin: 20px 0;
+  background-color: #f8f9fa;
   padding: 15px;
-  background-color: #f9f9f9;
   border-radius: 8px;
+  margin-top: 20px;
 }
 
 .price-row {
   display: flex;
   justify-content: space-between;
-  font-size: 1rem;
+  margin-bottom: 8px;
 }
 
-.price-value {
+.price-row:last-child {
+  margin-bottom: 0;
   font-weight: 600;
   color: #2e5c31;
 }
 
 .modal-footer {
-  display: flex;
-  padding: 15px 20px;
-  background-color: #f9f9f9;
+  padding: 20px;
   border-top: 1px solid #eee;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
 }
 
 .btn {
-  flex: 1;
-  padding: 12px;
-  border: none;
-  border-radius: 8px;
+  padding: 10px 20px;
+  border-radius: 6px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.2s ease;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  background-color: #f3f4f6;
+  color: #4b5563;
+  border: 1px solid #e5e7eb;
 }
 
 .btn-primary {
   background-color: #2e5c31;
   color: white;
-  margin-left: 10px;
+  border: none;
 }
 
-.btn-primary:hover {
+.btn-primary:hover:not(:disabled) {
   background-color: #26492a;
 }
 
-.btn-secondary {
-  background-color: white;
-  color: #666;
-  border: 1px solid #ddd;
-}
-
-.btn-secondary:hover {
-  background-color: #f5f5f5;
+@media (max-width: 768px) {
+  .modal-content {
+    width: 95%;
+  }
+  
+  .modal-header {
+    padding: 15px;
+  }
+  
+  .modal-body {
+    padding: 15px;
+  }
+  
+  .modal-footer {
+    padding: 15px;
+  }
 }
 </style>

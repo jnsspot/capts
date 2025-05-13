@@ -59,7 +59,7 @@
             </div>
             
             <div class="tab-content" v-if="activeTab === 'profile'">
-              <button class="menu-item" @click="navigateToEditProfile"> <!-- Add @click handler -->
+              <button class="menu-item" @click="navigateToEditProfile">
                 <Edit size="18" />
                 Edit Profile
               </button>
@@ -211,7 +211,7 @@
 </template>
 <script setup>
 import { ref, computed, onMounted } from 'vue';
-import { useRouter } from 'vue-router'; // Import useRouter
+import { useRouter } from 'vue-router';
 import { 
   Search, 
   Bell, 
@@ -241,110 +241,100 @@ import HarvestForecasting from '@/components/admindashboard/HarvestForecasting.v
 import RecentActivity from '@/components/admindashboard/RecentActivity.vue';
 import { db } from '@/firebase/firebaseConfig';
 import { collection, getDocs, query, where } from "firebase/firestore";
-import { getAuth } from "firebase/auth"; // Import Firebase Auth
+import { getAuth } from "firebase/auth";
 
 // Firebase Auth
 const auth = getAuth();
 
 // Vue Router
-const router = useRouter(); // Initialize useRouter
+const router = useRouter();
 
-// Logged-in admin data
-const adminData = ref(null);
-
-// Fetch the logged-in admin's data
-const fetchAdminData = async () => {
-  try {
-    const user = auth.currentUser; // Get the currently logged-in user
-    if (user) {
-      const userId = user.uid; // Get the user ID
-      const adminsQuery = query(collection(db, "admins"), where("userId", "==", userId)); // Query the admins collection
-      const adminsSnapshot = await getDocs(adminsQuery);
-      if (!adminsSnapshot.empty) {
-        adminData.value = adminsSnapshot.docs[0].data(); // Set the admin data
-      }
-    }
-  } catch (error) {
-    console.error("Error fetching admin data:", error);
-  }
-};
-
-// Profile dropdown state
+// State
 const showProfileMenu = ref(false);
 const activeTab = ref('profile');
 const profileRef = ref(null);
+const adminData = ref(null);
+const totalSellers = ref(0);
+const totalCustomers = ref(0);
+const totalUsers = ref(0);
+const totalProducts = ref(0);
 
-// Current date
+// Computed
 const currentDate = computed(() => {
-  const date = new Date();
-  return date.toLocaleDateString('en-US', { 
-    weekday: 'long', 
-    year: 'numeric', 
-    month: 'long', 
-    day: 'numeric' 
+  return new Date().toLocaleDateString('en-US', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
   });
 });
 
-// Data for metrics
-const sellers = ref([]);
-const customers = ref([]);
-const products = ref([]);
-
-// Computed properties for metrics
-const totalSellers = computed(() => sellers.value.length);
-const totalCustomers = computed(() => customers.value.length);
-const totalUsers = computed(() => totalSellers.value + totalCustomers.value);
-const totalProducts = computed(() => products.value.length);
-
-// Fetch data from Firestore
-const fetchData = async () => {
-  try {
-    // Fetch sellers
-    const sellersQuery = query(collection(db, "users"), where("role", "==", "seller"));
-    const sellersSnapshot = await getDocs(sellersQuery);
-    sellers.value = sellersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    
-    // Fetch customers
-    const customersQuery = query(collection(db, "users"), where("role", "==", "customer"));
-    const customersSnapshot = await getDocs(customersQuery);
-    customers.value = customersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    
-    // Fetch products
-    const productsSnapshot = await getDocs(collection(db, "products"));
-    products.value = productsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-  } catch (error) {
-    console.error("Error fetching data:", error);
-  }
-};
-
-// Toggle profile menu
+// Methods
 const toggleProfileMenu = () => {
   showProfileMenu.value = !showProfileMenu.value;
 };
 
-// Set active tab
 const setActiveTab = (tab) => {
   activeTab.value = tab;
 };
 
-// Navigate to Edit Profile page
 const navigateToEditProfile = () => {
-  router.push('/admin/edit-profile'); // Navigate to the Edit Profile route
+  router.push('/admin/edit-profile');
 };
 
-// Close dropdown when clicking outside
-const handleClickOutside = (event) => {
-  if (profileRef.value && !profileRef.value.contains(event.target)) {
-    showProfileMenu.value = false;
+// Fetch admin data
+const fetchAdminData = async () => {
+  try {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    const adminQuery = query(
+      collection(db, 'admins'),
+      where('email', '==', user.email)
+    );
+    const querySnapshot = await getDocs(adminQuery);
+    
+    if (!querySnapshot.empty) {
+      adminData.value = querySnapshot.docs[0].data();
+    }
+  } catch (error) {
+    console.error('Error fetching admin data:', error);
   }
 };
 
-onMounted(async () => {
-  if (profileRef.value) {
-    document.addEventListener('click', handleClickOutside);
+// Fetch dashboard metrics
+const fetchDashboardMetrics = async () => {
+  try {
+    // Fetch total sellers
+    const sellersSnapshot = await getDocs(collection(db, 'sellers'));
+    totalSellers.value = sellersSnapshot.size;
+
+    // Fetch total customers
+    const customersSnapshot = await getDocs(collection(db, 'customers'));
+    totalCustomers.value = customersSnapshot.size;
+
+    // Fetch total users (sellers + customers)
+    totalUsers.value = totalSellers.value + totalCustomers.value;
+
+    // Fetch total products
+    const productsSnapshot = await getDocs(collection(db, 'products'));
+    totalProducts.value = productsSnapshot.size;
+  } catch (error) {
+    console.error('Error fetching dashboard metrics:', error);
   }
-  await fetchAdminData(); // Fetch admin data
-  await fetchData();
+};
+
+// Lifecycle hooks
+onMounted(() => {
+  fetchAdminData();
+  fetchDashboardMetrics();
+  
+  // Close profile menu when clicking outside
+  document.addEventListener('click', (e) => {
+    if (profileRef.value && !profileRef.value.contains(e.target)) {
+      showProfileMenu.value = false;
+    }
+  });
 });
 </script>
 
@@ -352,40 +342,39 @@ onMounted(async () => {
 .dashboard-container {
   display: flex;
   min-height: 100vh;
-  background-color: #f9fafb;
+  background-color: #f5f5f5;
 }
 
 .main-content {
   flex: 1;
-  padding: 20px;
-  overflow-y: auto;
-  margin-left: 260px; /* Adjust this value to match the width of the sidebar */
+  padding: 2rem;
+  margin-left: 250px;
 }
 
 .header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
+  margin-bottom: 2rem;
 }
 
 .search-container {
   flex: 1;
+  max-width: 400px;
 }
 
 .search-box {
   display: flex;
   align-items: center;
-  background-color: #fff;
-  border-radius: 20px;
-  padding: 8px 16px;
-  width: 300px;
-  border: 1px solid #e5e7eb;
+  background-color: white;
+  border-radius: 8px;
+  padding: 0.5rem 1rem;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .search-icon {
-  color: #9ca3af;
-  margin-right: 8px;
+  color: #666;
+  margin-right: 0.5rem;
 }
 
 .search-box input {
@@ -398,22 +387,12 @@ onMounted(async () => {
 .user-profile {
   display: flex;
   align-items: center;
-  gap: 15px;
-  position: relative;
+  gap: 1rem;
   cursor: pointer;
+  position: relative;
 }
 
 .notification-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background-color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #6b7280;
-  cursor: pointer;
-  border: 1px solid #e5e7eb;
   position: relative;
 }
 
@@ -421,249 +400,176 @@ onMounted(async () => {
   position: absolute;
   top: -5px;
   right: -5px;
-  background-color: #ef4444;
+  background-color: #ff4444;
   color: white;
-  border-radius: 50%;
-  width: 18px;
-  height: 18px;
   font-size: 0.7rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.avatar {
-  width: 40px;
-  height: 40px;
+  padding: 0.1rem 0.3rem;
   border-radius: 50%;
-  overflow: hidden;
 }
 
 .avatar img {
-  width: 100%;
-  height: 100%;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
   object-fit: cover;
 }
 
-.user-info {
-  display: flex;
-  flex-direction: column;
-}
-
 .user-info h3 {
-  font-size: 0.95rem;
-  font-weight: 600;
+  font-size: 0.9rem;
   margin: 0;
-  color: #111827;
 }
 
 .user-info p {
   font-size: 0.8rem;
-  color: #6b7280;
+  color: #666;
   margin: 0;
 }
 
-/* Profile Dropdown Menu */
 .profile-dropdown {
   position: absolute;
-  top: 60px;
+  top: 100%;
   right: 0;
-  width: 280px;
-  background-color: #fff;
-  border-radius: 10px;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
-  z-index: 100;
-  overflow: hidden;
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  width: 300px;
+  z-index: 1000;
+  margin-top: 0.5rem;
 }
 
 .profile-header {
   display: flex;
   align-items: center;
-  padding: 15px;
-  border-bottom: 1px solid #f3f4f6;
-  position: relative;
-}
-
-.profile-avatar {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  overflow: hidden;
-  margin-right: 12px;
+  gap: 1rem;
+  padding: 1rem;
+  border-bottom: 1px solid #eee;
 }
 
 .profile-avatar img {
-  width: 100%;
-  height: 100%;
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
   object-fit: cover;
 }
 
-.profile-header h3 {
-  font-size: 0.95rem;
-  font-weight: 600;
-  margin: 0;
-  color: #111827;
-}
-
-.profile-header p {
-  font-size: 0.8rem;
-  color: #6b7280;
-  margin: 0;
-}
-
 .logout-btn {
-  position: absolute;
-  right: 15px;
-  top: 15px;
+  margin-left: auto;
   background: none;
   border: none;
-  color: #ef4444;
   cursor: pointer;
-  padding: 5px;
-  border-radius: 50%;
-}
-
-.logout-btn:hover {
-  background-color: #fee2e2;
+  color: #666;
 }
 
 .profile-tabs {
   display: flex;
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid #eee;
 }
 
 .tab-btn {
   flex: 1;
-  padding: 12px;
-  background: none;
-  border: none;
-  font-size: 0.9rem;
-  color: #6b7280;
-  cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  position: relative;
+  gap: 0.5rem;
+  padding: 1rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #666;
 }
 
 .tab-btn.active {
-  color: #3498db;
-  font-weight: 500;
-}
-
-.tab-btn.active::after {
-  content: '';
-  position: absolute;
-  bottom: -1px;
-  left: 0;
-  width: 100%;
-  height: 2px;
-  background-color: #3498db;
+  color: #4CAF50;
+  border-bottom: 2px solid #4CAF50;
 }
 
 .tab-content {
-  padding: 10px;
+  padding: 0.5rem;
 }
 
 .menu-item {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 0.5rem;
   width: 100%;
-  padding: 10px 15px;
+  padding: 0.75rem 1rem;
   background: none;
   border: none;
-  text-align: left;
-  font-size: 0.9rem;
-  color: #4b5563;
-  border-radius: 6px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  color: #666;
+  border-radius: 4px;
 }
 
 .menu-item:hover {
-  background-color: #f9fafb;
-  color: #3498db;
-}
-
-.dashboard-content {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
+  background-color: #f5f5f5;
 }
 
 .dashboard-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  margin-bottom: 2rem;
 }
 
 .dashboard-header h1 {
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: #111827;
+  font-size: 1.8rem;
   margin: 0;
 }
 
 .date-filter {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
-  background-color: #fff;
-  border: 1px solid #e5e7eb;
+  gap: 0.5rem;
+  background-color: white;
+  padding: 0.5rem 1rem;
   border-radius: 8px;
-  font-size: 0.9rem;
-  color: #6b7280;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   cursor: pointer;
 }
 
 .metric-cards {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 20px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 2rem;
 }
 
 .metric-card {
-  background-color: #fff;
-  border-radius: 10px;
-  padding: 20px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  background-color: white;
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   display: flex;
-  align-items: center;
-  gap: 15px;
-  transition: transform 0.2s ease;
-}
-
-.metric-card:hover {
-  transform: translateY(-5px);
+  gap: 1rem;
 }
 
 .metric-icon {
-  width: 50px;
-  height: 50px;
-  border-radius: 10px;
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
 }
 
 .metric-icon.blue {
-  background-color: #3498db;
+  background-color: #e3f2fd;
+  color: #1976d2;
 }
 
 .metric-icon.green {
-  background-color: #4a8f4d;
+  background-color: #e8f5e9;
+  color: #2e7d32;
 }
 
 .metric-icon.purple {
-  background-color: #8b5cf6;
+  background-color: #f3e5f5;
+  color: #7b1fa2;
 }
 
 .metric-icon.orange {
-  background-color: #f59e0b;
+  background-color: #fff3e0;
+  color: #f57c00;
 }
 
 .metric-content {
@@ -674,62 +580,60 @@ onMounted(async () => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 5px;
+  margin-bottom: 0.5rem;
 }
 
 .metric-header h3 {
   font-size: 0.9rem;
-  font-weight: 500;
-  color: #6b7280;
+  color: #666;
   margin: 0;
 }
 
 .info-icon {
-  color: #9ca3af;
+  color: #999;
   cursor: pointer;
 }
 
 .metric-value {
   font-size: 1.8rem;
-  font-weight: 700;
-  color: #111827;
-  margin-bottom: 5px;
+  font-weight: bold;
+  margin-bottom: 0.5rem;
 }
 
 .metric-trend {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 0.25rem;
   font-size: 0.8rem;
 }
 
 .metric-trend.positive {
-  color: #4a8f4d;
+  color: #2e7d32;
 }
 
 .metric-trend.negative {
-  color: #ef4444;
+  color: #c62828;
 }
 
 .dashboard-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 20px;
-}
-
-@media (max-width: 1200px) {
-  .metric-cards {
-    grid-template-columns: repeat(2, 1fr);
-  }
-  
-  .dashboard-grid {
-    grid-template-columns: 1fr;
-  }
+  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 2rem;
 }
 
 @media (max-width: 768px) {
+  .main-content {
+    margin-left: 0;
+    padding: 1rem;
+  }
+
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+
   .metric-cards {
     grid-template-columns: 1fr;
   }
 }
-</style>
+</style> 

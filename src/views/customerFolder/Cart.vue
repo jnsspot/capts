@@ -114,6 +114,7 @@ import { getAuth } from "firebase/auth";
 import { useRouter } from 'vue-router';
 
 export default {
+  name: 'ShoppingCart',
   components: {
     BottomNavigation,
     ChevronLeft,

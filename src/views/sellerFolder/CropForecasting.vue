@@ -698,6 +698,10 @@ onMounted(() => {
   // Initialize sample data
   initSampleData();
 });
+
+defineOptions({
+  name: 'CropForecasting'
+});
 </script>
 
 <style scoped>

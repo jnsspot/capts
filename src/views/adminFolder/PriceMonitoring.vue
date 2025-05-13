@@ -434,7 +434,7 @@
 </template>
 
 <script>
-import { ref, onMounted, computed, watch } from 'vue';
+import { ref, onMounted, computed, watch, onBeforeUnmount, nextTick } from 'vue';
 import Chart from 'chart.js/auto';
 import AdminSidebar from '@/components/AdminSidebar.vue';
 import { db } from '@/firebase/firebaseConfig';
@@ -678,36 +678,36 @@ export default {
     const filteredProducts = computed(() => {
       let result = [...products.value];
       
-      // Apply category filter
-      if (selectedCategory.value) {
-        result = result.filter(product => 
-          product.category === selectedCategory.value
-        );
-      }
-      
-      // Apply price change filter
-      if (selectedPriceChange.value) {
-        switch (selectedPriceChange.value) {
-          case 'increase':
-            result = result.filter(product => product.change > 0);
-            break;
-          case 'decrease':
-            result = result.filter(product => product.change < 0);
-            break;
-          case 'stable':
-            result = result.filter(product => Math.abs(product.change) < 1);
-            break;
-        }
-      }
-      
       // Apply search filter
       if (searchQuery.value) {
         const query = searchQuery.value.toLowerCase();
         result = result.filter(product => 
-          product.productName.toLowerCase().includes(query) || 
+          product.productName.toLowerCase().includes(query) ||
           product.category.toLowerCase().includes(query) ||
           (product.sellerName && product.sellerName.toLowerCase().includes(query))
         );
+      }
+      
+      // Apply category filter
+      if (selectedCategory.value) {
+        result = result.filter(product => product.category === selectedCategory.value);
+      }
+      
+      // Apply price change filter
+      if (selectedPriceChange.value) {
+        result = result.filter(product => {
+          const change = product.change;
+          switch (selectedPriceChange.value) {
+            case 'increase':
+              return change > 0;
+            case 'decrease':
+              return change < 0;
+            case 'stable':
+              return change === 0;
+            default:
+              return true;
+          }
+        });
       }
       
       // Apply sorting
@@ -716,7 +716,7 @@ export default {
           case 'productName':
             return a.productName.localeCompare(b.productName);
           case 'price':
-            return b.price - a.price;
+            return a.price - b.price;
           case 'change':
             return b.change - a.change;
           case 'stock':
@@ -726,13 +726,13 @@ export default {
         }
       });
       
-      totalItems.value = result.length;
-      
-      // Apply pagination
-      const startIndex = (currentPage.value - 1) * itemsPerPage.value;
-      const endIndex = startIndex + itemsPerPage.value;
-      return result.slice(startIndex, endIndex);
+      return result;
     });
+    
+    // Move side effect to watch effect
+    watch(filteredProducts, (newValue) => {
+      totalItems.value = newValue.length;
+    }, { immediate: true });
     
     const totalPages = computed(() => {
       return Math.ceil(totalItems.value / itemsPerPage.value);
@@ -785,11 +785,14 @@ export default {
     const renderChart = () => {
       if (!priceChart.value) return;
       
+      // Destroy existing chart instance if it exists
       if (chartInstance.value) {
         chartInstance.value.destroy();
+        chartInstance.value = null;
       }
       
       const ctx = priceChart.value.getContext('2d');
+      if (!ctx) return; // Guard against null context
       
       // Prepare data based on current view
       let labels = [];
@@ -801,55 +804,134 @@ export default {
       const tertiaryColor = isDarkMode.value ? '#3a7f3d' : '#3a7f3d';
       const textColor = isDarkMode.value ? '#e0e0e0' : '#333';
       
-      if (currentChartView.value === 'category') {
-        // Group by category
-        const categoryData = {};
-        categories.value.forEach(category => {
-          categoryData[category] = 0;
-        });
+      try {
+        if (currentChartView.value === 'category') {
+          // Group by category
+          const categoryData = {};
+          categories.value.forEach(category => {
+            categoryData[category] = 0;
+          });
+          
+          // Calculate average price for each category
+          products.value.forEach(product => {
+            if (product.category && categoryData[product.category] !== undefined) {
+              categoryData[product.category] += product.price;
+            }
+          });
+          
+          // Count products in each category for average calculation
+          const categoryCounts = {};
+          products.value.forEach(product => {
+            if (product.category) {
+              categoryCounts[product.category] = (categoryCounts[product.category] || 0) + 1;
+            }
+          });
+          
+          // Calculate average price for each category
+          Object.keys(categoryData).forEach(category => {
+            if (categoryCounts[category] > 0) {
+              categoryData[category] = categoryData[category] / categoryCounts[category];
+            }
+          });
+          
+          // Create labels and data arrays
+          labels = Object.keys(categoryData);
+          const data = Object.values(categoryData);
+          
+          // Create dataset
+          datasets.push({
+            label: 'Average Price by Category',
+            data: data,
+            backgroundColor: labels.map((_, i) => {
+              const colors = [primaryColor, secondaryColor, tertiaryColor, '#5aaf5d', '#7ac97d'];
+              return colors[i % colors.length] + '80';
+            }),
+            borderColor: labels.map((_, i) => {
+              const colors = [primaryColor, secondaryColor, tertiaryColor, '#5aaf5d', '#7ac97d'];
+              return colors[i % colors.length];
+            }),
+            borderWidth: 1
+          });
+        } else if (currentChartView.value === 'seller') {
+          // Group by seller
+          const sellerData = {};
+          const sellerNames = {};
+          
+          // Get seller names
+          sellers.value.forEach(seller => {
+            sellerNames[seller.sellerId] = seller.farmName || 'Unknown';
+          });
+          
+          // Group products by seller
+          products.value.forEach(product => {
+            if (product.sellerId) {
+              const sellerName = sellerNames[product.sellerId] || 'Unknown';
+              if (!sellerData[sellerName]) {
+                sellerData[sellerName] = {
+                  totalPrice: 0,
+                  count: 0
+                };
+              }
+              sellerData[sellerName].totalPrice += product.price;
+              sellerData[sellerName].count += 1;
+            }
+          });
+          
+          // Calculate average price per seller
+          Object.keys(sellerData).forEach(seller => {
+            if (sellerData[seller].count > 0) {
+              sellerData[seller] = sellerData[seller].totalPrice / sellerData[seller].count;
+            } else {
+              sellerData[seller] = 0;
+            }
+          });
+          
+          // Create labels and data arrays
+          labels = Object.keys(sellerData);
+          const data = Object.values(sellerData);
+          
+          // Create dataset
+          datasets.push({
+            label: 'Average Price by Seller',
+            data: data,
+            backgroundColor: labels.map((_, i) => {
+              const colors = [primaryColor, secondaryColor, tertiaryColor, '#5aaf5d', '#7ac97d', '#8ad98d'];
+              return colors[i % colors.length] + '80';
+            }),
+            borderColor: labels.map((_, i) => {
+              const colors = [primaryColor, secondaryColor, tertiaryColor, '#5aaf5d', '#7ac97d', '#8ad98d'];
+              return colors[i % colors.length];
+            }),
+            borderWidth: 1
+          });
+        } else if (currentChartView.value === 'products') {
+          // Show top 5 products by price
+          const topProducts = [...products.value]
+            .sort((a, b) => b.price - a.price)
+            .slice(0, 5);
+          
+          // Create labels and data arrays
+          labels = topProducts.map(product => product.productName);
+          
+          const data = topProducts.map(product => product.price);
+          
+          // Create dataset
+          datasets.push({
+            label: 'Top Products by Price',
+            data: data,
+            backgroundColor: labels.map((_, i) => {
+              const colors = [primaryColor, secondaryColor, tertiaryColor, '#5aaf5d', '#7ac97d'];
+              return colors[i % colors.length] + '80';
+            }),
+            borderColor: labels.map((_, i) => {
+              const colors = [primaryColor, secondaryColor, tertiaryColor, '#5aaf5d', '#7ac97d'];
+              return colors[i % colors.length];
+            }),
+            borderWidth: 1
+          });
+        }
         
-        // Calculate average price for each category
-        products.value.forEach(product => {
-          if (product.category && categoryData[product.category] !== undefined) {
-            categoryData[product.category] += product.price;
-          }
-        });
-        
-        // Count products in each category for average calculation
-        const categoryCounts = {};
-        products.value.forEach(product => {
-          if (product.category) {
-            categoryCounts[product.category] = (categoryCounts[product.category] || 0) + 1;
-          }
-        });
-        
-        // Calculate average price for each category
-        Object.keys(categoryData).forEach(category => {
-          if (categoryCounts[category] > 0) {
-            categoryData[category] = categoryData[category] / categoryCounts[category];
-          }
-        });
-        
-        // Create labels and data arrays
-        labels = Object.keys(categoryData);
-        const data = Object.values(categoryData);
-        
-        // Create dataset
-        datasets.push({
-          label: 'Average Price by Category',
-          data: data,
-          backgroundColor: labels.map((_, i) => {
-            const colors = [primaryColor, secondaryColor, tertiaryColor, '#5aaf5d', '#7ac97d'];
-            return colors[i % colors.length] + '80';
-          }),
-          borderColor: labels.map((_, i) => {
-            const colors = [primaryColor, secondaryColor, tertiaryColor, '#5aaf5d', '#7ac97d'];
-            return colors[i % colors.length];
-          }),
-          borderWidth: 1
-        });
-        
-        // Create chart
+        // Create chart with error handling and disabled animations
         chartInstance.value = new Chart(ctx, {
           type: 'bar',
           data: {
@@ -859,6 +941,7 @@ export default {
           options: {
             responsive: true,
             maintainAspectRatio: false,
+            animation: false, // Disable animations completely
             plugins: {
               legend: {
                 display: false
@@ -896,269 +979,105 @@ export default {
             }
           }
         });
-      } else if (currentChartView.value === 'seller') {
-        // Group by seller
-        const sellerData = {};
-        const sellerNames = {};
-        
-        // Get seller names
-        sellers.value.forEach(seller => {
-          sellerNames[seller.sellerId] = seller.farmName || 'Unknown';
-        });
-        
-        // Group products by seller
-        products.value.forEach(product => {
-          if (product.sellerId) {
-            const sellerName = sellerNames[product.sellerId] || 'Unknown';
-            if (!sellerData[sellerName]) {
-              sellerData[sellerName] = {
-                totalPrice: 0,
-                count: 0
-              };
-            }
-            sellerData[sellerName].totalPrice += product.price;
-            sellerData[sellerName].count += 1;
-          }
-        });
-        
-        // Calculate average price per seller
-        Object.keys(sellerData).forEach(seller => {
-          if (sellerData[seller].count > 0) {
-            sellerData[seller] = sellerData[seller].totalPrice / sellerData[seller].count;
-          } else {
-            sellerData[seller] = 0;
-          }
-        });
-        
-        // Create labels and data arrays
-        labels = Object.keys(sellerData);
-        const data = Object.values(sellerData);
-        
-        // Create dataset
-        datasets.push({
-          label: 'Average Price by Seller',
-          data: data,
-          backgroundColor: labels.map((_, i) => {
-            const colors = [primaryColor, secondaryColor, tertiaryColor, '#5aaf5d', '#7ac97d', '#8ad98d'];
-            return colors[i % colors.length] + '80';
-          }),
-          borderColor: labels.map((_, i) => {
-            const colors = [primaryColor, secondaryColor, tertiaryColor, '#5aaf5d', '#7ac97d', '#8ad98d'];
-            return colors[i % colors.length];
-          }),
-          borderWidth: 1
-        });
-        
-        // Create chart
-        chartInstance.value = new Chart(ctx, {
-          type: 'bar',
-          data: {
-            labels: labels,
-            datasets: datasets
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-              legend: {
-                display: false
-              },
-              tooltip: {
-                callbacks: {
-                  label: function(context) {
-                    return `${context.dataset.label}: ₱${context.parsed.y.toFixed(2)}`;
-                  }
-                }
-              }
-            },
-            scales: {
-              x: {
-                grid: {
-                  display: false,
-                  color: isDarkMode.value ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)'
-                },
-                ticks: {
-                  color: textColor
-                }
-              },
-              y: {
-                beginAtZero: true,
-                grid: {
-                  color: isDarkMode.value ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)'
-                },
-                ticks: {
-                  color: textColor,
-                  callback: function(value) {
-                    return `₱${value.toFixed(2)}`;
-                  }
-                }
-              }
-            }
-          }
-        });
-      } else if (currentChartView.value === 'products') {
-        // Show top 5 products by price
-        const topProducts = [...products.value]
-          .sort((a, b) => b.price - a.price)
-          .slice(0, 5);
-        
-        // Create labels and data arrays
-        labels = topProducts.map(product => product.productName);
-        
-        const data = topProducts.map(product => product.price);
-        
-        // Create dataset
-        datasets.push({
-          label: 'Top Products by Price',
-          data: data,
-          backgroundColor: labels.map((_, i) => {
-            const colors = [primaryColor, secondaryColor, tertiaryColor, '#5aaf5d', '#7ac97d'];
-            return colors[i % colors.length] + '80';
-          }),
-          borderColor: labels.map((_, i) => {
-            const colors = [primaryColor, secondaryColor, tertiaryColor, '#5aaf5d', '#7ac97d'];
-            return colors[i % colors.length];
-          }),
-          borderWidth: 1
-        });
-        
-        // Create chart
-        chartInstance.value = new Chart(ctx, {
-          type: 'bar',
-          data: {
-            labels: labels,
-            datasets: datasets
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-              legend: {
-                display: false
-              },
-              tooltip: {
-                callbacks: {
-                  label: function(context) {
-                    return `${context.dataset.label}: ₱${context.parsed.y.toFixed(2)}`;
-                  }
-                }
-              }
-            },
-            scales: {
-              x: {
-                grid: {
-                  display: false,
-                  color: isDarkMode.value ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)'
-                },
-                ticks: {
-                  color: textColor
-                }
-              },
-              y: {
-                beginAtZero: true,
-                grid: {
-                  color: isDarkMode.value ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)'
-                },
-                ticks: {
-                  color: textColor,
-                  callback: function(value) {
-                    return `₱${value.toFixed(2)}`;
-                  }
-                }
-              }
-            }
-          }
-        });
+      } catch (error) {
+        console.error('Error rendering chart:', error);
       }
     };
     
     const renderProductChart = () => {
       if (!productHistoryChart.value || !selectedProduct.value) return;
       
+      // Destroy existing chart instance if it exists
       if (productChartInstance.value) {
         productChartInstance.value.destroy();
+        productChartInstance.value = null;
       }
       
       const ctx = productHistoryChart.value.getContext('2d');
+      if (!ctx) return; // Guard against null context
       
-      // For demo purposes, generate some price history data
-      // In a real app, this would come from Firebase
-      const today = new Date();
-      const labels = [];
-      const prices = [];
-      
-      for (let i = 30; i >= 0; i--) {
-        const date = new Date();
-        date.setDate(today.getDate() - i);
-        labels.push(formatDate(date.toISOString()));
+      try {
+        // For demo purposes, generate some price history data
+        const today = new Date();
+        const labels = [];
+        const prices = [];
         
-        // Generate a price that fluctuates around the current price
-        const fluctuation = (Math.random() * 0.2) - 0.1; // -10% to +10%
-        const historicalPrice = selectedProduct.value.price * (1 + fluctuation);
-        prices.push(historicalPrice);
-      }
-      
-      // Set chart colors based on dark mode
-      const primaryColor = isDarkMode.value ? '#6abe6e' : '#2e5c31';
-      const textColor = isDarkMode.value ? '#e0e0e0' : '#333';
-      
-      productChartInstance.value = new Chart(ctx, {
-        type: 'line',
-        data: {
-          labels: labels,
-          datasets: [
-            {
-              label: 'Price History',
-              data: prices,
-              borderColor: primaryColor,
-              backgroundColor: primaryColor + '20',
-              tension: 0.3,
-              fill: true
-            }
-          ]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: {
-            legend: {
-              display: false
-            },
-            tooltip: {
-              callbacks: {
-                label: function(context) {
-                  return `Price: ₱${context.parsed.y.toFixed(2)}`;
+        for (let i = 30; i >= 0; i--) {
+          const date = new Date();
+          date.setDate(today.getDate() - i);
+          labels.push(formatDate(date.toISOString()));
+          
+          // Generate a price that fluctuates around the current price
+          const fluctuation = (Math.random() * 0.2) - 0.1; // -10% to +10%
+          const historicalPrice = selectedProduct.value.price * (1 + fluctuation);
+          prices.push(historicalPrice);
+        }
+        
+        // Set chart colors based on dark mode
+        const primaryColor = isDarkMode.value ? '#6abe6e' : '#2e5c31';
+        const textColor = isDarkMode.value ? '#e0e0e0' : '#333';
+        
+        productChartInstance.value = new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: labels,
+            datasets: [
+              {
+                label: 'Price History',
+                data: prices,
+                borderColor: primaryColor,
+                backgroundColor: primaryColor + '20',
+                tension: 0.3,
+                fill: true
+              }
+            ]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false, // Disable animations completely
+            plugins: {
+              legend: {
+                display: false
+              },
+              tooltip: {
+                callbacks: {
+                  label: function(context) {
+                    return `Price: ₱${context.parsed.y.toFixed(2)}`;
+                  }
                 }
               }
-            }
-          },
-          scales: {
-            x: {
-              grid: {
-                display: false,
-                color: isDarkMode.value ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)'
-              },
-              ticks: {
-                color: textColor,
-                maxRotation: 45,
-                minRotation: 45
-              }
             },
-            y: {
-              beginAtZero: false,
-              grid: {
-                color: isDarkMode.value ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)'
+            scales: {
+              x: {
+                grid: {
+                  display: false,
+                  color: isDarkMode.value ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)'
+                },
+                ticks: {
+                  color: textColor,
+                  maxRotation: 45,
+                  minRotation: 45
+                }
               },
-              ticks: {
-                color: textColor,
-                callback: function(value) {
-                  return `₱${value.toFixed(2)}`;
+              y: {
+                beginAtZero: false,
+                grid: {
+                  color: isDarkMode.value ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)'
+                },
+                ticks: {
+                  color: textColor,
+                  callback: function(value) {
+                    return `₱${value.toFixed(2)}`;
+                  }
                 }
               }
             }
           }
-        }
-      });
+        });
+      } catch (error) {
+        console.error('Error rendering product chart:', error);
+      }
     };
     
     const viewProductDetails = async (product) => {
@@ -1401,10 +1320,12 @@ export default {
     
     // Watch for dark mode changes
     watch(() => isDarkMode.value, () => {
-      renderChart();
-      if (showProductModal.value) {
-        renderProductChart();
-      }
+      nextTick(() => {
+        renderChart();
+        if (showProductModal.value) {
+          renderProductChart();
+        }
+      });
     });
     
     onMounted(() => {
@@ -1412,7 +1333,23 @@ export default {
       isDarkMode.value = document.body.classList.contains('dark');
       
       // Fetch data from Firebase
-      fetchData();
+      fetchData().then(() => {
+        // Wait for next tick to ensure DOM is ready
+        nextTick(() => {
+          renderChart();
+        });
+      });
+    });
+    
+    onBeforeUnmount(() => {
+      if (chartInstance.value) {
+        chartInstance.value.destroy();
+        chartInstance.value = null;
+      }
+      if (productChartInstance.value) {
+        productChartInstance.value.destroy();
+        productChartInstance.value = null;
+      }
     });
     
     return {
